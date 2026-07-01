@@ -1,4 +1,7 @@
-// Paste your Supabase project details here.
-const SUPABASE_URL = "PASTE_SUPABASE_URL_HERE";
-const SUPABASE_ANON_KEY = "PASTE_SUPABASE_ANON_KEY_HERE";
+// Supabase configuration
+
+const SUPABASE_URL = "https://betegruehqssirdfaloq.supabase.co";
+
+const SUPABASE_ANON_KEY = "sb_publishable_iMBS4XocWeozdtNweFyG_Q_okDdkFGk";
+
 const FAMILY_MEDIA_BUCKET = "family-media";
