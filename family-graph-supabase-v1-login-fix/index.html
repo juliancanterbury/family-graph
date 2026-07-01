@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Family Graph</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div id="login" class="login">
+  <div class="login-card">
+    <div class="logo">🌳</div>
+    <h1>Family Graph</h1>
+    <p>Private shared family archive.</p>
+    <input id="emailInput" type="email" placeholder="Email address">
+    <button class="primary" onclick="sendLogin()">Send sign-in link</button>
+    <p class="small">No password. Supabase sends a secure magic link.</p>
+  </div>
+</div>
+
+<div id="app" class="app hidden">
+<header>
+  <div class="brand"><div class="logo-small">🌳</div><div><h1>Family Graph</h1><p id="status">Shared Supabase database</p></div></div>
+  <div class="actions">
+    <button onclick="showPage('photo')" class="primary">Photo Builder</button>
+    <button onclick="showPage('graph')">Graph</button>
+    <button onclick="showPage('people')">People</button>
+    <button onclick="showPage('relationships')">Relationships</button>
+    <button onclick="signOut()">Sign out</button>
+  </div>
+</header>
+
+<main>
+  <section id="photoPage" class="page photo-page">
+    <div class="photo-main">
+      <div class="toolbar">
+        <label class="button primary">Upload photo<input id="photoInput" type="file" accept="image/*" hidden onchange="uploadPhoto(event)"></label>
+        <button onclick="useSample()">Use sample photo locally</button>
+        <button onclick="addFaceBox()">Add face box</button>
+        <button onclick="deleteSelectedFace()">Delete selected face</button>
+        <span id="saveStatus" class="save-status">Ready</span>
+      </div>
+      <div class="photo-scroll">
+        <div class="photo-canvas" id="photoCanvas"><img id="mainPhoto" src="" alt=""></div>
+      </div>
+    </div>
+
+    <aside class="side">
+      <div class="card">
+        <h2>Selected face</h2>
+        <div id="faceEditor"><p>Upload/select a photo, then add or select a face box.</p></div>
+      </div>
+
+      <div class="card">
+        <h2>Add relationship</h2>
+        <div class="row"><label>Person</label><select id="relA"></select></div>
+        <div class="relationship-buttons">
+          <button onclick="setRel('mother',this)">Mother of</button>
+          <button onclick="setRel('father',this)">Father of</button>
+          <button onclick="setRel('parent',this)">Parent of</button>
+          <button onclick="setRel('partner',this)">Partner of</button>
+          <button onclick="setRel('child',this)">Child of</button>
+          <button onclick="setRel('sibling',this)">Sibling of</button>
+        </div>
+        <div class="row"><label>Other</label><select id="relB"></select></div>
+        <div id="relationshipWarning" class="warning hidden"></div>
+        <button class="primary" onclick="saveRelationship()">Save relationship</button>
+      </div>
+
+      <div class="card">
+        <h2>Current photo</h2>
+        <p><strong id="faceCount">0</strong> face boxes</p>
+        <p><strong id="namedCount">0</strong> named faces</p>
+      </div>
+    </aside>
+  </section>
+
+  <section id="graphPage" class="page graph-page hidden">
+    <div class="toolbar">
+      <button onclick="renderGraph()">Rebuild graph</button>
+      <button onclick="fitGraph()">Fit</button>
+      <button onclick="zoomGraph(0.12)">+</button>
+      <button onclick="zoomGraph(-0.12)">−</button>
+      <button onclick="resetGraphZoom()">100%</button>
+      <span id="zoomLabel" class="save-status">100%</span>
+    </div>
+    <div class="graph-wrap" id="graphWrap"><div class="graph" id="graph"></div></div>
+  </section>
+
+  <section id="peoplePage" class="page people-page hidden">
+    <div class="people-head"><h2>People</h2><button class="primary" onclick="addUnknownPerson()">Add unknown person</button></div>
+    <div id="peopleList" class="people-list"></div>
+  </section>
+
+  <section id="relationshipsPage" class="page people-page hidden">
+    <h2>Relationships</h2>
+    <div id="relationshipList" class="relationship-list"></div>
+  </section>
+</main>
+</div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
