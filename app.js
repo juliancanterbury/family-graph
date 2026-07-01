@@ -28,43 +28,13 @@ let scale = .72;
 let positions = {};
 
 async function loadData(){
-  if(client){
-    const pr = await client.from("people").select("*").order("created_at");
-    people = (!pr.error && pr.data?.length) ? pr.data.map(normalisePerson) : demoPeople;
-    const rr = await client.from("relationships").select("*");
-    relationships = (!rr.error && rr.data?.length) ? rr.data.map(normaliseRelationship) : demoRelationships;
-  } else {
-    people = demoPeople;
-    relationships = demoRelationships;
-  }
-  selected = people.find(p=>p.id==="julian" || p.first_name==="Julian") || people[0];
+  people = demoPeople;
+  relationships = demoRelationships;
+  selected = people.find(p=>p.id==="julian") || people[0];
   computeLayout();
   renderGraph();
   renderProfile();
-  fitGraph();
-}
-
-function normalisePerson(p){
-  return {
-    id:p.id,
-    first_name:p.first_name,
-    last_name:p.last_name,
-    birth_year:p.birth_year,
-    death_year:p.death_year,
-    living:p.living,
-    bio:p.bio,
-    main_photo_url:p.main_photo_url
-  };
-}
-
-function normaliseRelationship(r){
-  return {
-    id:r.id,
-    from:r.from_person_id || r.from,
-    to:r.to_person_id || r.to,
-    type:r.relationship_type || r.type,
-    label:r.label || ""
-  };
+  setTimeout(fitGraph, 0);
 }
 
 function initials(p){
@@ -84,33 +54,19 @@ function isPartnerType(t){
 }
 
 function computeLayout(){
-  positions = {};
+  positions = {
+    jean:   {x:760,  y:210},
+    paul:   {x:1180, y:210},
+    julian: {x:480,  y:650},
+    zoe:    {x:720,  y:650},
+    rachel: {x:1120, y:650},
+    andrew: {x:1520, y:650}
+  };
 
-  const spousePairs = relationships.filter(r=>isPartnerType(r.type));
-  const parentLinks = relationships.filter(r=>r.type==="parent");
-
-  const childrenOfJeanPaul = ["julian","rachel","andrew"].filter(id=>people.some(p=>p.id===id));
-  const baseX = 760;
-  const topY = 210;
-  const childY = 650;
-
-  // Parent couple
-  positions.jean = {x:baseX, y:topY};
-  positions.paul = {x:baseX+420, y:topY};
-
-  // Julian + Zoe partnership sits as a couple block, independent of sibling line.
-  positions.julian = {x:baseX-280, y:childY};
-  positions.zoe = {x:baseX-40, y:childY};
-
-  // Siblings continue to the right
-  positions.rachel = {x:baseX+360, y:childY};
-  positions.andrew = {x:baseX+760, y:childY};
-
-  // Fallback for future people
   let i = 0;
   people.forEach(p=>{
     if(!positions[p.id]){
-      positions[p.id] = {x:baseX + (i*230), y:childY + 260};
+      positions[p.id] = {x:760 + (i*230), y:910};
       i++;
     }
   });
@@ -118,6 +74,7 @@ function computeLayout(){
 
 function renderGraph(){
   const g = document.getElementById("graph");
+  if(!g) return;
   g.innerHTML = "";
 
   drawRelationships(g);
@@ -141,15 +98,14 @@ function renderGraph(){
 }
 
 function dateText(p){
-  if(p.first_name==="Zoe" && p.last_name==="Phillips") return "Partner";
+  if(p.id==="zoe") return "Partner";
   if(p.birth_year && p.death_year) return `${p.birth_year}–${p.death_year}`;
   if(p.birth_year) return `${p.birth_year}–`;
   return "";
 }
 
 function drawRelationships(g){
-  const jean = positions.jean, paul = positions.paul, julian = positions.julian, zoe = positions.zoe, rachel = positions.rachel, andrew = positions.andrew;
-  if(!jean || !paul) return;
+  if(!positions.jean || !positions.paul || !positions.julian) return;
 
   const parentMidX = midpoint(centerX("jean"), centerX("paul"));
   const parentY = centerY("jean");
@@ -158,20 +114,20 @@ function drawRelationships(g){
   drawH(g, rightX("jean"), parentY, leftX("paul") - rightX("jean"));
   drawRel(g, parentMidX - 48, parentY - 24, "Married<br>1966");
 
-  // Children line for only Julian, Rachel, Andrew.
-  const childTopY = topY("julian");
-  const trunkBottom = childTopY - 115;
+  // Children line: only Julian, Rachel and Andrew.
+  const trunkBottom = topY("julian") - 115;
   drawV(g, parentMidX, parentY, trunkBottom - parentY);
   drawH(g, centerX("julian"), trunkBottom, centerX("andrew") - centerX("julian"));
+
   ["julian","rachel","andrew"].forEach(id=>{
-    drawV(g, centerX(id), trunkBottom, topY(id) - trunkBottom);
+    if(positions[id]) drawV(g, centerX(id), trunkBottom, topY(id) - trunkBottom);
   });
 
-  // Julian + Zoe partner line. This is independent and does not connect Zoe to Jean/Paul.
+  // Julian + Zoe partner line. Independent of parent/child line.
   if(positions.zoe){
     const jy = centerY("julian");
     drawH(g, rightX("julian"), jy, leftX("zoe") - rightX("julian"));
-    drawRel(g, rightX("julian")+30, jy-24, "Partners");
+    drawRel(g, rightX("julian") + 30, jy - 24, "Partners");
   }
 }
 
@@ -185,28 +141,38 @@ function midpoint(a,b){return (a+b)/2}
 function drawH(g,x,y,w){
   const el=document.createElement("div");
   el.className="line h";
-  el.style.left=x+"px"; el.style.top=y+"px"; el.style.width=Math.max(0,w)+"px";
+  el.style.left=x+"px";
+  el.style.top=y+"px";
+  el.style.width=Math.max(0,w)+"px";
   g.appendChild(el);
 }
 
 function drawV(g,x,y,h){
   const el=document.createElement("div");
   el.className="line v";
-  el.style.left=x+"px"; el.style.top=y+"px"; el.style.height=Math.max(0,h)+"px";
+  el.style.left=x+"px";
+  el.style.top=y+"px";
+  el.style.height=Math.max(0,h)+"px";
   g.appendChild(el);
 }
 
 function drawRel(g,x,y,html){
   const el=document.createElement("div");
   el.className="rel";
-  el.style.left=x+"px"; el.style.top=y+"px"; el.innerHTML=html;
+  el.style.left=x+"px";
+  el.style.top=y+"px";
+  el.innerHTML=html;
   g.appendChild(el);
 }
 
 function renderProfile(){
+  const panel = document.getElementById("profile");
+  if(!panel || !selected) return;
+
   const p = selected;
   const rels = relationshipsFor(p.id);
-  document.getElementById("profile").innerHTML = `
+
+  panel.innerHTML = `
     <div class="card">
       <h2>${fullName(p)}</h2>
       <p class="note">${p.living ? "Living" : "Deceased"} · ${p.living ? "main photo chosen by person" : "main photo chosen by tree editor"}</p>
@@ -220,11 +186,10 @@ function renderProfile(){
     <div class="card">
       <h2>Relationships</h2>
       <div class="relationship-list">${rels || "<p>No direct relationships yet.</p>"}</div>
-      <p class="note">This panel is now driven by relationship data, not drawn lines.</p>
     </div>
     <div class="card">
       <h2>Graph engine v1</h2>
-      <p class="note">Partners are drawn beside each other. Children are drawn only below confirmed parents. Zoe is no longer connected to Jean and Paul.</p>
+      <p class="note">Partners are drawn beside each other. Children are drawn only below confirmed parents. Zoe is not connected to Jean and Paul.</p>
     </div>`;
 }
 
@@ -234,12 +199,11 @@ function relationshipsFor(id){
     if(r.from===id || r.to===id){
       const other = getPerson(r.from===id ? r.to : r.from);
       if(!other) return;
+
       let label = r.type;
-      if(r.type==="parent"){
-        label = r.from===id ? "Parent of" : "Child of";
-      } else if(isPartnerType(r.type)){
-        label = "Partner";
-      }
+      if(r.type==="parent") label = r.from===id ? "Parent of" : "Child of";
+      if(isPartnerType(r.type)) label = "Partner";
+
       lines.push(`<p><strong>${label}</strong>: ${fullName(other)}</p>`);
     }
   });
@@ -254,25 +218,27 @@ function editSelected(field,value){
 }
 
 async function savePerson(){
-  if(!client){
-    alert("Demo mode: add Supabase keys in config.js to save.");
-    return;
-  }
-  const {error}=await client.from("people").upsert(selected);
-  alert(error ? error.message : "Saved.");
+  alert("Demo mode: database saving comes next.");
 }
 
 function fitGraph(){
   const wrap=document.getElementById("graphWrap");
+  const graph=document.getElementById("graph");
+  if(!wrap || !graph) return;
+
   scale=Math.min(wrap.clientWidth/2100, wrap.clientHeight/900, .78);
-  document.getElementById("graph").style.transform=`scale(${scale})`;
+  graph.style.transform=`scale(${scale})`;
   wrap.scrollLeft=420*scale;
   wrap.scrollTop=120*scale;
 }
 
 function centreOn(id){
-  const pos=positions[id]; if(!pos) return;
+  const pos=positions[id];
+  if(!pos) return;
+
   const wrap=document.getElementById("graphWrap");
+  if(!wrap) return;
+
   wrap.scrollLeft=(pos.x*scale)-(wrap.clientWidth/2)+(95*scale);
   wrap.scrollTop=(pos.y*scale)-(wrap.clientHeight/2)+(60*scale);
 }
@@ -280,6 +246,7 @@ function centreOn(id){
 document.getElementById("fitBtn").onclick=fitGraph;
 document.getElementById("meBtn").onclick=()=>centreOn("julian");
 document.getElementById("layoutBtn").onclick=()=>{computeLayout();renderGraph();fitGraph();};
+
 document.getElementById("search").oninput=e=>{
   const q=e.target.value.toLowerCase();
   const p=people.find(x=>fullName(x).toLowerCase().includes(q));
