@@ -1,50 +1,132 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Family Graph</title>
-  <link rel="stylesheet" href="style.css">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Family Graph MVP</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="app">
-  <header>
-    <div class="brand">
-      <div class="logo">🌳</div>
-      <div>
-        <h1>Family Graph</h1>
-        <p>Relationship-driven graph engine</p>
+<header>
+  <div class="brand">
+    <div class="logo">🌳</div>
+    <div>
+      <h1>Family Graph</h1>
+      <p>Build the graph from photographs, names and relationships</p>
+    </div>
+  </div>
+  <div class="actions">
+    <button onclick="showPage('graph')">Graph</button>
+    <button onclick="showPage('photo')">Build from photo</button>
+    <button onclick="showPage('people')">People</button>
+    <button class="primary" onclick="exportData()">Export data</button>
+    <label class="button">Import data<input type="file" accept=".json" hidden onchange="importData(event)"></label>
+  </div>
+</header>
+
+<main>
+  <aside>
+    <button class="nav active" data-page="graph" onclick="showPage('graph')">🌳 Family Graph</button>
+    <button class="nav" data-page="photo" onclick="showPage('photo')">🖼 Build from Photo</button>
+    <button class="nav" data-page="people" onclick="showPage('people')">👥 People</button>
+    <button class="nav" data-page="help" onclick="showPage('help')">❔ How to use</button>
+    <div class="sidebox">
+      <strong>Saved locally</strong>
+      <p>This MVP saves in this browser. Use Export / Import to share with family.</p>
+      <button onclick="resetDemo()">Reset demo</button>
+    </div>
+  </aside>
+
+  <section id="graphPage" class="page graph-page">
+    <div class="toolbar">
+      <input id="search" placeholder="Search people…" oninput="searchPerson(this.value)">
+      <button onclick="fitGraph()">Fit</button>
+      <button onclick="centreOn('julian')">Me</button>
+      <button onclick="autoLayout()">Re-layout</button>
+      <button onclick="addPersonPrompt()">+ Person</button>
+    </div>
+    <div class="graph-wrap" id="graphWrap">
+      <div class="graph" id="graph"></div>
+    </div>
+    <div class="profile" id="profile"></div>
+  </section>
+
+  <section id="photoPage" class="page hidden photo-page">
+    <div class="photo-main">
+      <div class="photo-toolbar">
+        <label class="button primary">Choose photo<input id="photoInput" type="file" accept="image/*" hidden onchange="loadPhoto(event)"></label>
+        <button onclick="useSamplePhoto()">Use sample reunion photo</button>
+        <button onclick="addFaceMode()">Add face box</button>
+        <button onclick="clearFaceSelection()">Clear selection</button>
+      </div>
+      <div class="photo-wrap" id="photoWrap">
+        <img id="mainPhoto" src="birthday-photo.jpg" alt="Family photograph">
       </div>
     </div>
-    <div class="actions">
-      <input id="search" placeholder="Search people…">
-      <button id="fitBtn">Fit</button>
-      <button id="meBtn">Me</button>
-      <a class="button primary" href="photo-builder.html">Build tree from photo</a>
-      <button id="layoutBtn">Re-layout</button>
+    <div class="photo-side">
+      <div class="card">
+        <h2>Photo workflow</h2>
+        <div class="stats">
+          <div><strong id="faceCount">0</strong><span>faces</span></div>
+          <div><strong id="namedFaceCount">0</strong><span>named</span></div>
+          <div><strong id="relationshipCount">0</strong><span>links</span></div>
+        </div>
+        <p>Click “Add face box”, then click on each face. Name the person. Add relationships. The graph updates.</p>
+      </div>
+
+      <div class="card" id="faceEditor">
+        <h2>Selected face</h2>
+        <p>Click a face box, or add one first.</p>
+      </div>
+
+      <div class="card">
+        <h2>Add relationship</h2>
+        <div class="row"><label>Person</label><select id="relA"></select></div>
+        <div class="row"><label>Relation</label><select id="relType">
+          <option value="mother">Mother of</option>
+          <option value="father">Father of</option>
+          <option value="parent">Parent of</option>
+          <option value="partner">Partner of</option>
+          <option value="child">Child of</option>
+          <option value="sibling">Sibling of</option>
+        </select></div>
+        <div class="row"><label>Other</label><select id="relB"></select></div>
+        <button class="primary" onclick="addRelationshipFromForm()">Add relationship</button>
+      </div>
+
+      <div class="card">
+        <h2>Named people in photo</h2>
+        <div id="photoPeople" class="pills"></div>
+      </div>
     </div>
-  </header>
+  </section>
 
-  <main>
-    <aside>
-      <button class="active">Family Graph</button>
-      <button>People</button>
-      <button>Photos</button>
-      <a class="side-link" href="photo-builder.html">Build From Photo</a>
-      <button>Join Trees</button>
-      <button>Requests</button>
-      <button>Admin</button>
-    </aside>
+  <section id="peoplePage" class="page hidden people-page">
+    <div class="people-header">
+      <h2>People</h2>
+      <button class="primary" onclick="addPersonPrompt()">+ Add person</button>
+    </div>
+    <div id="peopleList" class="people-list"></div>
+  </section>
 
-    <section class="graph-wrap" id="graphWrap">
-      <div class="graph" id="graph"></div>
-    </section>
-
-    <section class="profile" id="profile"></section>
-  </main>
+  <section id="helpPage" class="page hidden help-page">
+    <div class="help">
+      <h2>How to use this MVP</h2>
+      <ol>
+        <li>Open <strong>Build from Photo</strong>.</li>
+        <li>Use the sample photo or choose another group photo.</li>
+        <li>Click <strong>Add face box</strong>, then click a face in the image.</li>
+        <li>Name that person. Existing names are reused automatically.</li>
+        <li>Add core relationships: mother, father, partner, child.</li>
+        <li>Open <strong>Graph</strong> to see the family graph update.</li>
+        <li>Click <strong>Export data</strong> to send the family data to someone else.</li>
+      </ol>
+      <p><strong>Important:</strong> this version is designed to get family members contributing quickly. The next stage is Supabase so everyone edits the same shared database.</p>
+    </div>
+  </section>
+</main>
 </div>
-<script src="config.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
