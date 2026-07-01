@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Build Tree From Photo - Family Graph</title>
+<link rel="stylesheet" href="photo-builder.css">
+</head>
+<body>
+<div class="app">
+<header>
+  <div class="brand"><div class="logo">🌳</div><div><h1>Build Tree From Photo</h1><p>Name faces, assign relationships, grow the graph</p></div></div>
+  <div class="actions"><a class="button" href="index.html">← Back to graph</a><button onclick="autoNameDemo()">Demo names</button><button class="primary" onclick="exportData()">Export JSON</button></div>
+</header>
+<main>
+<section class="photo-pane"><div class="photo-wrap" id="photoWrap"><img src="birthday-photo.jpg" alt="Family group photo"></div></section>
+<aside class="side">
+  <div class="panel"><h2>Photo import</h2><div class="counts"><div class="stat"><strong id="faceCount">0</strong>faces</div><div class="stat"><strong id="namedCount">0</strong>named</div><div class="stat"><strong id="relCount">0</strong>links</div></div><p>This simulates AI face detection. In the real app these boxes are generated automatically.</p></div>
+  <div class="panel" id="editor"><h2>Selected face</h2><p>Click a face in the photo.</p></div>
+  <div class="panel"><h2>Relationship builder</h2><div class="row"><label>Person</label><select id="relA"></select></div><div class="row"><label>Relation</label><select id="relType"><option value="mother">Mother of</option><option value="father">Father of</option><option value="partner">Partner of</option><option value="child">Child of</option><option value="sibling">Sibling of</option></select></div><div class="row"><label>Other</label><select id="relB"></select></div><button class="primary" onclick="addRelationship()">Add relationship</button><p>Siblings, grandparents, cousins and uncles/aunts can be inferred from primary links.</p></div>
+  <div class="panel"><h2>Named people</h2><div class="people-list" id="peopleList"></div></div>
+  <div class="panel"><h2>Live mini-tree</h2><div class="tree" id="miniTree"></div></div>
+</aside>
+</main>
+<script src="photo-builder.js"></script>
+</body>
+</html>
