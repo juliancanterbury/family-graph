@@ -1,0 +1,15 @@
+Family Graph - quick introduction for Andrew
+
+This is a shared family archive for photos, people and relationships.
+
+Start with Photos. A photo opens cleanly first. Use Show names to see who has been identified, and Show boxes if you want to see the face markers.
+
+If you recognise someone or spot a mistake, use Suggest face/name or write a comment. Your suggestions do not overwrite the main archive; Julian can review and approve them.
+
+People shows everyone currently in the archive. A person can have dates, relationships and tagged photos. You can help add missing dates or details where you know them.
+
+Tree shows the family relationships. It is still a work in progress, so use it as a helpful visual guide rather than a finished printed tree.
+
+Review is where comments, corrections, bugs and requests are collected. Use it for anything uncertain rather than deleting or overwriting someone else's work.
+
+The important rule: add knowledge, don't worry about breaking anything. Deletions are restricted to the archive owner.
