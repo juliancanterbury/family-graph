@@ -68,6 +68,17 @@ async function previousPhoto(){if(!photos.length)return;let i=photoIndex();if(i<
 async function nextPhoto(){if(!photos.length)return;let i=photoIndex();if(i<0)i=0;await selectPhotoById(photos[Math.min(photos.length-1,i+1)].id)}
 async function uploadPhoto(ev){const file=ev.target.files?.[0]; if(!file)return; setStatus('Uploading photo…'); const id=uid(),ext=(file.name.split('.').pop()||'jpg').toLowerCase(),path=`photos/${id}/original.${ext}`; const up=await sb.storage.from(MEDIA_BUCKET()).upload(path,file,{upsert:false}); if(up.error){alert(up.error.message);setStatus('Upload failed');return} const ins=await sb.from('photos').insert({id,title:file.name,storage_path:path,original_filename:file.name,mime_type:file.type,uploaded_by:session.user.id}).select().single(); if(ins.error){alert(ins.error.message);return} photos.unshift(ins.data); currentPhoto=ins.data; selectedFaceId=null; updateDashboard(); await renderCurrentPhoto();updateSide();await renderPhotoSidebar();setStatus('Photo saved — detecting faces…'); setTimeout(()=>detectFacesOnPhoto(true),350)}
 async function renderCurrentPhoto(){const img=el('mainPhoto'),empty=el('emptyPhoto'),c=el('photoCanvas'); if(img)img.src=currentPhoto?await photoUrl(currentPhoto):''; if(empty)empty.style.display=currentPhoto?'none':'grid'; if(!c)return; c.querySelectorAll('.face').forEach(e=>e.remove()); if(!currentPhoto)return; faces.filter(f=>f.photo_id===currentPhoto.id).forEach(f=>c.appendChild(faceElement(f))); c.classList.toggle('hide-boxes',!showFaceBoxes); c.classList.toggle('hide-names',!showFaceNames); const ph=currentPhoto; if(el('photoDate'))el('photoDate').value=ph.date_taken||ph.photo_date||ph.taken_at||''; if(el('photoPlace'))el('photoPlace').value=ph.location||ph.place||''}
+
+function selectFace(id, focusName=false){
+  selectedFaceId=id;
+  renderFaceEditor();
+  document.querySelectorAll('.face').forEach(box=>box.classList.remove('selected'));
+  const box=document.querySelector(`[data-face-id="${CSS.escape(id)}"]`);
+  if(box)box.classList.add('selected');
+  if(focusName){
+    setTimeout(()=>{ const input=el('faceName'); if(input){ input.focus(); input.select(); } },0);
+  }
+}
 async function renderPhotoSidebar(query=''){query=String(query||'').toLowerCase(); await renderPhotoPeopleNav(query); await renderPhotoList(query)}
 async function renderPhotoPeopleNav(query=''){const box=el('photoPeopleNav'); if(!box)return; let rows=visiblePeople().filter(p=>!query||fullName(p).toLowerCase().includes(query)).slice(0,12); let html=''; for(const p of rows){html+=`<button class="photo-person-link" onclick="showPerson('${p.id}')">${await photoHtml(p,34,'tiny-avatar')}<div><b>${escapeHtml(fullName(p))}</b><br><span class="small">${escapeHtml(p.birth_date||'')}</span></div><span class="blue-dot"></span></button>`} box.innerHTML=html||'<p class="small">No people found.</p>'}
 async function renderPhotoList(query=''){const box=el('photoList'); if(!box)return; let rows=photos.filter(ph=>!query||photoTitle(ph).toLowerCase().includes(query)); let html=''; for(const ph of rows){const url=await photoUrl(ph); const fc=faces.filter(f=>f.photo_id===ph.id).length,nc=faces.filter(f=>f.photo_id===ph.id&&f.person_id).length; const date=ph.date_taken||ph.photo_date||ph.taken_at||ph.created_at?.slice(0,10)||''; html+=`<button class="photo-list-item ${currentPhoto?.id===ph.id?'active':''}" onclick="selectPhotoById('${ph.id}')"><img src="${url}" alt=""><span><b>${escapeHtml(photoTitle(ph))}</b><small>${escapeHtml(date)} · ${fc} face${fc===1?'':'s'}${nc?` · ${nc} named`:''}</small></span></button>`} box.innerHTML=html||'<p class="small">No photos found.</p>'}
@@ -77,27 +88,31 @@ function toggleFaceNames(){showFaceNames=!showFaceNames;renderCurrentPhoto();saf
 
 function faceElement(f){
   const d=document.createElement('div');
+  d.dataset.faceId=f.id;
   d.className='face'+(f.person_id?' named':'')+(f.id===selectedFaceId?' selected':'')+(!f.person_id?' unknown':'');
   d.style.left=Number(f.x)+'px';d.style.top=Number(f.y)+'px';d.style.width=Number(f.w)+'px';d.style.height=Number(f.h)+'px';
   const label=f.label || (f.id===selectedFaceId?'Unnamed face':'');
   d.innerHTML=`<span>${escapeHtml(label)}</span><div class="handle"></div>`;
-  d.addEventListener('pointerdown',ev=>startDrag(ev,f.id));
+  d.addEventListener('pointerdown',ev=>{
+    if(ev.target.classList.contains('handle'))return;
+    ev.stopPropagation();
+    selectFace(f.id, !f.person_id && editMode);
+    if(editMode) startDrag(ev,f.id);
+  });
   d.querySelector('.handle').addEventListener('pointerdown',ev=>startResize(ev,f.id));
-  d.addEventListener('click',ev=>{ev.stopPropagation();selectedFaceId=f.id;renderCurrentPhoto();renderFaceEditor()});
+  d.addEventListener('click',ev=>{ev.stopPropagation();selectFace(f.id,!f.person_id&&editMode)});
+  d.addEventListener('dblclick',ev=>{ev.stopPropagation();setEditMode(true);selectFace(f.id,true)});
   return d
 }
-async function addFaceBox(){if(!currentPhoto)return alert('Upload a photo first.'); const ins=await sb.from('faces').insert({photo_id:currentPhoto.id,x:200,y:160,w:80,h:100,label:null,status:'manual',created_by:session.user.id}).select().single(); if(ins.error){alert(ins.error.message);return} faces.push(ins.data); selectedFaceId=ins.data.id; updateDashboard(); await renderCurrentPhoto();updateSide();setStatus('Face saved')}
+async function addFaceBox(){if(!currentPhoto)return alert('Upload a photo first.'); const ins=await sb.from('faces').insert({photo_id:currentPhoto.id,x:200,y:160,w:80,h:100,label:null,status:'manual',created_by:session.user.id}).select().single(); if(ins.error){alert(ins.error.message);return} faces.push(ins.data); selectedFaceId=ins.data.id; updateDashboard(); await renderCurrentPhoto();updateSide();selectFace(ins.data.id,true);setStatus('Face saved')}
 let dragState=null;
 function startDrag(ev,id){
   if(ev.target.classList.contains('handle'))return;
-  selectedFaceId=id;
-  renderCurrentPhoto();
-  renderFaceEditor();
   if(!editMode)return;
   ev.preventDefault();ev.stopPropagation();
   const f=faces.find(x=>x.id===id); if(!f)return;
   dragState={mode:'drag',id,startX:ev.clientX,startY:ev.clientY,x:Number(f.x),y:Number(f.y)};
-  ev.currentTarget.setPointerCapture(ev.pointerId);
+  ev.currentTarget.setPointerCapture?.(ev.pointerId);
   window.addEventListener('pointermove',onPointerMove);window.addEventListener('pointerup',endPointer)
 }
 function startResize(ev,id){if(!editMode)return; ev.preventDefault();ev.stopPropagation(); selectedFaceId=id; const f=faces.find(x=>x.id===id); if(!f)return; dragState={mode:'resize',id,startX:ev.clientX,startY:ev.clientY,w:Number(f.w),h:Number(f.h)}; ev.currentTarget.parentElement.setPointerCapture(ev.pointerId); window.addEventListener('pointermove',onPointerMove);window.addEventListener('pointerup',endPointer)}
@@ -114,13 +129,13 @@ function renderFaceEditor(){
   }
   const opts=['<option value="">Choose existing person…</option>'].concat(visiblePeople().sort((a,b)=>fullName(a).localeCompare(fullName(b))).map(pp=>`<option value="${pp.id}" ${pp.id===f.person_id?'selected':''}>${escapeHtml(fullName(pp))}</option>`)).join('');
   const current=p?fullName(p):(f.label||'Unnamed face');
-  const typed=p?'':(f.label||'');
+  const typed=p?'':(['unknown','unknown person','unnamed','unnamed person','unnamed face'].includes(String(f.label||'').toLowerCase())?'':(f.label||''));
   w.innerHTML=`
     <div class="selected-face-summary"><p class="small">Current</p><strong>${escapeHtml(current)}</strong></div>
     <div class="form-grid compact-form">
       <label>Use existing person<select id="existingPersonSelect">${opts}</select></label>
       <button class="primary full" onclick="attachFaceToExisting()">Use selected person</button>
-      <label>Create new person<input id="faceName" value="${escapeHtml(typed)}" placeholder="Type a new full name" autocomplete="off" onblur="this.value=titleCaseName(this.value)"></label>
+      <label>Create new person<input id="faceName" value="${escapeHtml(typed)}" placeholder="Type a new full name" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();saveFaceName()}" onblur="this.value=titleCaseName(this.value)"></label>
       <button class="full" onclick="saveFaceName()">Create / save typed name</button>
       ${p?'<button class="full" onclick="unlinkSelectedFace()">Unlink this face</button>':''}
       <button class="full" onclick="suggestSelectedFaceName()">Suggest correction instead</button>
@@ -287,5 +302,5 @@ function zoomGraph(delta){const wrap=el('graphWrap'); if(!wrap)return; const old
 function resetGraphZoom(){graphScale=1;applyGraphZoom()}
 function fitGraph(){const wrap=el('graphWrap'); if(!wrap)return; graphScale=.78;applyGraphZoom();wrap.scrollLeft=60;wrap.scrollTop=40}
 
-Object.assign(window,{sendLogin,signOut,showPage,refreshData,setEditMode,uploadPhoto,selectPhotoById,selectLatestPhoto,previousPhoto,nextPhoto,detectFacesOnPhoto,addFaceBox,deleteSelectedFace,attachFaceToExisting,unlinkSelectedFace,saveFaceName,suggestSelectedFaceName,suggestFaceForPhoto,toggleFaceBoxes,toggleFaceNames,saveCurrentPhotoDetails,addPhotoComment,setRel,saveRelationship,deleteRelationship,renderRelationshipAssistant,queueRelationshipAssistantRender,saveAssistantRelationships,newFeedbackPrompt,setSuggestionStatus,setFeedbackStatus,addUnknownPerson,deletePerson,showPerson,linkMyProfileToPerson,focusTreeOnPerson,showDbTab,renderDatabase,selectDbPerson,selectDbPhoto,savePersonRecord,savePhotoRecord,showDeathDateField,renderGraph,fitGraph,zoomGraph,resetGraphZoom,setGraphFocus,setTreeMode,applyTheme,titleCaseName});
+Object.assign(window,{sendLogin,signOut,showPage,refreshData,setEditMode,uploadPhoto,selectPhotoById,selectLatestPhoto,previousPhoto,nextPhoto,detectFacesOnPhoto,addFaceBox,deleteSelectedFace,attachFaceToExisting,unlinkSelectedFace,saveFaceName,suggestSelectedFaceName,suggestFaceForPhoto,toggleFaceBoxes,toggleFaceNames,saveCurrentPhotoDetails,addPhotoComment,setRel,saveRelationship,deleteRelationship,renderRelationshipAssistant,queueRelationshipAssistantRender,saveAssistantRelationships,newFeedbackPrompt,setSuggestionStatus,setFeedbackStatus,addUnknownPerson,deletePerson,showPerson,linkMyProfileToPerson,focusTreeOnPerson,showDbTab,renderDatabase,selectDbPerson,selectDbPhoto,savePersonRecord,savePhotoRecord,showDeathDateField,renderGraph,fitGraph,zoomGraph,resetGraphZoom,setGraphFocus,setTreeMode,applyTheme,titleCaseName,selectFace});
 boot();
