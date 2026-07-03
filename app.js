@@ -93,7 +93,23 @@ function rectIoU(a,b){const ax2=a.x+a.w,ay2=a.y+a.h,bx2=b.x+b.w,by2=b.y+b.h; con
 async function detectFacesOnPhoto(auto=false){try{if(!currentPhoto)return alert('Open or upload a photo first.'); const img=el('mainPhoto'); await waitForImage(img); const detector=await Promise.race([ensureHumanDetector(),timeoutPromise(20000)]); setStatus('Detecting faces…'); const result=await Promise.race([detector.detect(img),timeoutPromise(20000)]); const scale=(img.clientWidth||img.naturalWidth)/(img.naturalWidth||img.clientWidth||1); const found=(result.face||[]).map(face=>{const box=face.box||face.boxRaw||[]; return {x:Math.round((box[0]||0)*scale),y:Math.round((box[1]||0)*scale),w:Math.round((box[2]||0)*scale),h:Math.round((box[3]||0)*scale)}}).filter(r=>r.w>=24&&r.h>=24); if(!found.length){setStatus('No faces detected'); if(!auto)alert('No faces detected. Use Add face box.'); return} const existing=faces.filter(f=>f.photo_id===currentPhoto.id).map(f=>({x:+f.x||0,y:+f.y||0,w:+f.w||0,h:+f.h||0})); const fresh=[]; for(const r of found){if(existing.some(e=>rectIoU(e,r)>.35)||fresh.some(e=>rectIoU(e,r)>.35))continue; fresh.push(r)} if(!fresh.length){setStatus(`Detected ${found.length}; all already boxed`);return} const rows=fresh.map(r=>({photo_id:currentPhoto.id,x:r.x,y:r.y,w:r.w,h:r.h,label:null,status:'detected',created_by:session.user.id})); const ins=await sb.from('faces').insert(rows).select(); if(ins.error){alert(ins.error.message);setStatus('Face save failed');return} faces.push(...(ins.data||[])); await renderCurrentPhoto();updateSide();updateDashboard();setStatus(`Detected ${fresh.length} new face${fresh.length===1?'':'s'}`)}catch(e){console.error(e);setStatus('Face detection unavailable'); if(!auto)alert(e.message)}}
 
 function faceForPerson(id){return faces.find(f=>f.person_id===id)}
-async function cropStyle(f,size=92){if(!f)return''; const ph=photos.find(p=>p.id===f.photo_id); if(!ph)return''; const url=await photoUrl(ph); return `background-image:url('${url}');background-size:cover;background-position:center center;background-repeat:no-repeat;`}
+async function cropStyle(f,size=92){
+  if(!f)return'';
+  const ph=photos.find(p=>p.id===f.photo_id); if(!ph)return'';
+  const url=await photoUrl(ph);
+  const samePhotoFaces=faces.filter(x=>x.photo_id===f.photo_id);
+  const maxRight=Math.max(...samePhotoFaces.map(x=>(Number(x.x)||0)+(Number(x.w)||0)), (Number(f.x)||0)+(Number(f.w)||0), 1200);
+  const maxBottom=Math.max(...samePhotoFaces.map(x=>(Number(x.y)||0)+(Number(x.h)||0)), (Number(f.y)||0)+(Number(f.h)||0), 800);
+  const baseW=maxRight<900?900:maxRight;
+  const x=Number(f.x)||0, y=Number(f.y)||0, w=Math.max(1,Number(f.w)||1), h=Math.max(1,Number(f.h)||1);
+  const zoom=1.45;
+  const scale=(Number(size)||92)/Math.max(w,h)*zoom;
+  const bgW=baseW*scale;
+  const cx=x+w/2, cy=y+h/2;
+  const bgX=(Number(size)||92)/2 - cx*scale;
+  const bgY=(Number(size)||92)/2 - cy*scale;
+  return `background-image:url('${url}') !important;background-size:${bgW}px auto !important;background-position:${bgX}px ${bgY}px !important;background-repeat:no-repeat !important;`;
+}
 async function photoHtml(p,size=92,cls='node-photo'){const f=faceForPerson(p.id); if(f)return `<div class="${cls}" style="${await cropStyle(f,size)}"></div>`; return `<div class="${cls}">${escapeHtml(initials(p))}</div>`}
 function photoHtmlSync(p,cls='node-photo'){const f=faceForPerson(p.id); return f?`<div class="${cls} async-photo" data-person-id="${p.id}">${escapeHtml(initials(p))}</div>`:`<div class="${cls}">${escapeHtml(initials(p))}</div>`}
 async function hydrateAsyncPortraits(){for(const e of [...document.querySelectorAll('.async-photo[data-person-id]')]){const p=person(e.dataset.personId),f=p?faceForPerson(p.id):null;if(!f)continue;e.setAttribute('style',await cropStyle(f));e.textContent=''}}
