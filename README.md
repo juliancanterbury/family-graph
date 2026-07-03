@@ -1,16 +1,23 @@
-# Family Graph
+# Family Graph v3
 
-Private family archive for people, photos, face boxes, relationships, review notes and tree views.
+Clean baseline rebuild. No database changes.
 
-## Current live files
+Copy `index.html`, `app.js`, and `style.css` into the repository root. Keep your existing `config.js`.
 
-- `index.html` — application shell
-- `app.js` — current application logic
-- `style.css` — current visual styling
-- `config.js` — local Supabase config, kept separately
+Main changes:
+- single, clean JavaScript file with duplicate functions removed
+- dashboard is a real home page
+- people list is alphabetical
+- person profile page added
+- clicking a person in People/Tree opens their profile
+- login can be linked to an existing person record
+- admin tab is hidden unless role is owner/editor/family editor
+- tree/profile/admin portraits are forced circular and not stretched
+- Relationship Assistant retained and simplified
+- face detector now times out instead of hanging forever
 
-## Important
-
-Keep your existing `config.js`. This package includes `config.example.js` only so private keys are not overwritten.
-
-Images should eventually live in Supabase Storage, not in GitHub, except for small static placeholders/assets.
+After copying:
+1. Commit and push.
+2. Open the site.
+3. Press Ctrl+F5.
+4. Check Dashboard, People, Photos, Tree, Relationships and Admin.
