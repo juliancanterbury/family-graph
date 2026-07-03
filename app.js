@@ -3,7 +3,6 @@ let people=[], photos=[], faces=[], relationships=[], suggestions=[], comments=[
 let currentPhoto=null, selectedFaceId=null, currentRel="mother", graphScale=1;
 let showFaceBoxes=true, showFaceNames=true, currentTheme=localStorage.getItem("familyGraphTheme")||"ocean";
 let currentDbTab="people", selectedDbId=null, editMode=false;
-let currentTreeMode=localStorage.getItem("familyGraphTreeMode")||"family", graphFocusId=localStorage.getItem("familyGraphFocusId")||null;
 let humanDetector=null, humanReadyPromise=null;
 
 const REDIRECT_URL = "https://juliancanterbury.github.io/family-graph/";
@@ -123,7 +122,7 @@ function showPage(page){
   if(page!=="photo"){ selectedFaceId=null; renderFaceEditor?.(); }
   if(page==="photo"){renderCurrentPhoto();updateSide();renderPhotoList()}
   if(page==="people"){renderPeople()}
-  if(page==="relationships"){renderRelationshipList();renderRelationshipAssistant()}
+  if(page==="relationships"){renderRelationshipList()}
   if(page==="admin"){renderDatabase()}
   if(page==="review"){renderReview()}
   if(page==="graph"){renderGraph();setTimeout(fitGraph,0)}
@@ -409,176 +408,7 @@ function relationshipSentence(r){
   if(r.relationship_type==="sibling")return`${fullName(a)} is sibling of ${fullName(b)}`;
   return`${fullName(a)} → ${fullName(b)}`
 }
-function relationshipExists(from,to,type){
-  if(!from||!to||!type)return false;
-  return relationships.some(r=>{
-    if(r.relationship_type!==type)return false;
-    if(type==='partner'||type==='sibling'){
-      return (r.from_person_id===from&&r.to_person_id===to)||(r.from_person_id===to&&r.to_person_id===from);
-    }
-    return r.from_person_id===from&&r.to_person_id===to;
-  });
-}
-function relationshipLabelFor(edge){
-  const a=person(edge.from), b=person(edge.to);
-  if(!a||!b)return 'Missing person';
-  if(edge.type==='parent')return `${fullName(a)} is ${edge.label||'parent'} of ${fullName(b)}`;
-  if(edge.type==='partner')return `${fullName(a)} is partner of ${fullName(b)}`;
-  if(edge.type==='sibling')return `${fullName(a)} is sibling of ${fullName(b)}`;
-  return `${fullName(a)} → ${fullName(b)}`;
-}
-function childrenOf(id){return relationships.filter(r=>r.relationship_type==='parent'&&r.from_person_id===id).map(r=>r.to_person_id).filter(pid=>isRealPerson(person(pid)))}
-function partnersOf(id){
-  return relationships.filter(r=>r.relationship_type==='partner'&&(r.from_person_id===id||r.to_person_id===id)).map(r=>r.from_person_id===id?r.to_person_id:r.from_person_id).filter(pid=>isRealPerson(person(pid)));
-}
-function parentsFor(id){return relationships.filter(r=>r.relationship_type==='parent'&&r.to_person_id===id).map(r=>r.from_person_id).filter(pid=>isRealPerson(person(pid)))}
-function siblingsOf(id){
-  const direct=relationships.filter(r=>r.relationship_type==='sibling'&&(r.from_person_id===id||r.to_person_id===id)).map(r=>r.from_person_id===id?r.to_person_id:r.from_person_id);
-  const ps=parentsFor(id);
-  const shared=ps.flatMap(p=>childrenOf(p)).filter(c=>c!==id);
-  return [...new Set([...direct,...shared])].filter(pid=>isRealPerson(person(pid)));
-}
-function assistantPersonOptions(selected){
-  return ['<option value="">Choose person…</option>'].concat(
-    visiblePeople().sort((a,b)=>fullName(a).localeCompare(fullName(b))).map(p=>`<option value="${p.id}" ${p.id===selected?'selected':''}>${escapeHtml(fullName(p))}</option>`)
-  ).join('');
-}
-let relationshipAssistantTimer=null;
-function queueRelationshipAssistantRender(){
-  clearTimeout(relationshipAssistantTimer);
-  relationshipAssistantTimer=setTimeout(renderRelationshipAssistant,120);
-}
-function getAssistantOtherName(){return titleCaseName(el('assistantNewPerson')?.value||'')}
-function getAssistantEdges(){
-  const subject=el('assistantSubject')?.value||'';
-  const existing=el('assistantOther')?.value||'';
-  const newName=getAssistantOtherName();
-  const other=existing || (newName?'__new__':'');
-  const type=el('assistantType')?.value||'partner';
-  const edges=[];
-  const notes=[];
-  if(!subject||!other)return {subject,other,type,newName,edges,notes};
-  const otherLabel=other==='__new__'?newName:fullName(person(other));
-  const add=(edge,checked=true,reason='')=>{
-    if(!edge.from||!edge.to||edge.from===edge.to)return;
-    if(edge.to==='__new__'||edge.from==='__new__'){
-      // allowed; resolved when saving
-    }else if(relationshipExists(edge.from,edge.to,edge.type)){
-      reason = reason ? reason+' · already exists' : 'Already exists';
-      checked=false;
-    }
-    edges.push({...edge,checked,reason});
-  };
-  if(type==='partner'){
-    add({from:subject,to:other,type:'partner',label:'partner'},true,'Main relationship');
-    const subjectChildren=childrenOf(subject);
-    if(subjectChildren.length){
-      subjectChildren.forEach(child=>add({from:other,to:child,type:'parent',label:'parent'},false,`Is ${otherLabel} also ${fullName(person(child))}'s parent?`));
-    }
-    if(other!=='__new__'){
-      childrenOf(other).forEach(child=>add({from:subject,to:child,type:'parent',label:'parent'},false,`Is ${fullName(person(subject))} also ${fullName(person(child))}'s parent?`));
-    }
-    notes.push('Partner does not automatically mean parent. Tick any shared children explicitly.');
-  }else if(type==='parent'){
-    add({from:subject,to:other,type:'parent',label:'parent'},true,'Main relationship');
-    partnersOf(subject).forEach(partnerId=>add({from:partnerId,to:other,type:'parent',label:'parent'},false,`Is ${fullName(person(partnerId))} also ${otherLabel}'s parent?`));
-    notes.push('Grandparents, cousins, nieces and nephews will be derived from the saved parent facts.');
-  }else if(type==='child'){
-    add({from:other,to:subject,type:'parent',label:'parent'},true,'Main relationship');
-    if(other!=='__new__')partnersOf(other).forEach(partnerId=>add({from:partnerId,to:subject,type:'parent',label:'parent'},false,`Is ${fullName(person(partnerId))} also ${fullName(person(subject))}'s parent?`));
-  }else if(type==='sibling'){
-    add({from:subject,to:other,type:'sibling',label:'sibling'},true,'Main relationship');
-    const subjectParents=parentsFor(subject);
-    subjectParents.forEach(parentId=>add({from:parentId,to:other,type:'parent',label:'parent'},false,`Is ${fullName(person(parentId))} also ${otherLabel}'s parent?`));
-    if(other!=='__new__'){
-      parentsFor(other).forEach(parentId=>add({from:parentId,to:subject,type:'parent',label:'parent'},false,`Is ${fullName(person(parentId))} also ${fullName(person(subject))}'s parent?`));
-    }
-    notes.push('Siblings are useful, but the tree is strongest when the shared parents are also entered.');
-  }
-  // remove duplicate proposed edges, preserving first
-  const seen=new Set();
-  const unique=[];
-  for(const e of edges){
-    const a=e.type==='partner'||e.type==='sibling'?[e.from,e.to].sort().join('|'):[e.from,e.to].join('|');
-    const key=`${e.type}|${a}`;
-    if(seen.has(key))continue;seen.add(key);unique.push(e);
-  }
-  return {subject,other,type,newName,edges:unique,notes};
-}
-function renderRelationshipAssistant(){
-  const subjectEl=el('assistantSubject'), otherEl=el('assistantOther');
-  if(!subjectEl||!otherEl)return;
-  const keepSubject=subjectEl.value || visiblePeople()[0]?.id || '';
-  const keepOther=otherEl.value || '';
-  subjectEl.innerHTML=assistantPersonOptions(keepSubject);
-  otherEl.innerHTML=assistantPersonOptions(keepOther);
-  const {subject,other,newName,edges,notes}=getAssistantEdges();
-  const preview=el('assistantPreview'), checklist=el('assistantChecklist'), derived=el('derivedPreview');
-  if(!subject||!other){
-    if(preview)preview.innerHTML='Choose a person and another existing/new person.';
-    if(checklist)checklist.innerHTML='';
-    if(derived)derived.innerHTML='Example: add Barbara White as Maria White’s parent; the app can later derive that Maria is Jean’s niece and Julian’s cousin.';
-    return;
-  }
-  const otherLabel=other==='__new__'?newName:fullName(person(other));
-  if(preview)preview.innerHTML=`You are adding facts around <strong>${escapeHtml(fullName(person(subject)))}</strong> and <strong>${escapeHtml(otherLabel)}</strong>.`;
-  if(checklist){
-    checklist.innerHTML=edges.map((e,i)=>{
-      const disabled=e.reason&&e.reason.includes('Already exists')?'disabled':'';
-      const checked=e.checked&&!disabled?'checked':'';
-      const label=relationshipLabelFor(e).replaceAll('__new__', otherLabel);
-      return `<label class="assistant-check"><input type="checkbox" data-edge-index="${i}" ${checked} ${disabled}><span><b>${escapeHtml(label)}</b>${e.reason?`<small>${escapeHtml(e.reason)}</small>`:''}</span></label>`;
-    }).join('') || '<p class="small">No new direct facts suggested.</p>';
-  }
-  if(derived){
-    const derivedLines=[];
-    if(edges.some(e=>e.type==='parent')) derivedLines.push('Cousins, nieces/nephews and grandparents should be derived from parent links — not manually stored.');
-    if(edges.some(e=>e.type==='partner')) derivedLines.push('Partner links keep couples together in the tree but never turn someone into a child of their partner’s parents.');
-    if(notes.length)derivedLines.push(...notes);
-    derived.innerHTML=derivedLines.map(x=>`<div class="derived-note">${escapeHtml(x)}</div>`).join('')||'No derived notes yet.';
-  }
-}
-async function findOrCreateAssistantPerson(){
-  const existing=el('assistantOther')?.value||'';
-  const newName=getAssistantOtherName();
-  if(existing)return existing;
-  if(!newName)return '';
-  let p=people.find(p=>fullName(p).toLowerCase()===newName.toLowerCase());
-  if(p)return p.id;
-  const parts=newName.split(' ');
-  const ins=await sb.from('people').insert({display_name:newName,given_names:parts[0]||newName,family_name:parts.slice(1).join(' ')||null,created_by:session.user.id}).select().single();
-  if(ins.error){alert(ins.error.message);return ''}
-  people.push(ins.data);
-  return ins.data.id;
-}
-async function saveAssistantRelationships(){
-  const data=getAssistantEdges();
-  if(!data.subject||!data.other)return alert('Choose two people first.');
-  const resolvedOther=await findOrCreateAssistantPerson();
-  if(!resolvedOther)return alert('Choose or create the other person.');
-  const checked=[...document.querySelectorAll('#assistantChecklist input[type="checkbox"]:checked')].map(cb=>Number(cb.dataset.edgeIndex));
-  if(!checked.length)return alert('Tick at least one direct relationship to save.');
-  const rows=[];
-  for(const i of checked){
-    const e=data.edges[i]; if(!e)continue;
-    const from=e.from==='__new__'?resolvedOther:e.from;
-    const to=e.to==='__new__'?resolvedOther:e.to;
-    if(!from||!to||from===to)continue;
-    if(relationshipExists(from,to,e.type))continue;
-    rows.push({from_person_id:from,to_person_id:to,relationship_type:e.type,label:e.label||e.type,source_photo_id:currentPhoto?currentPhoto.id:null,created_by:session.user.id});
-  }
-  if(!rows.length){setStatus('No new relationships to save');renderRelationshipAssistant();return;}
-  const ins=await sb.from('relationships').insert(rows).select();
-  if(ins.error){alert(ins.error.message);return}
-  relationships.push(...(ins.data||[]));
-  updateDashboard();updateSide();renderRelationshipList();renderRelationshipAssistant();await renderPeople();setStatus(`Saved ${rows.length} relationship${rows.length===1?'':'s'}`);
-}
-function renderRelationshipList(){
-  const q=(el('relationshipSearch')?.value||'').toLowerCase();
-  const rows=relationships.filter(r=>!q||relationshipSentence(r).toLowerCase().includes(q));
-  safeHTML('relationshipList',rows.map(r=>`<div class="rel-row"><div><strong>${relationshipSentence(r)}</strong><br><span class="small">Direct fact · ${escapeHtml(r.relationship_type)}</span></div><button class="danger" onclick="deleteRelationship('${r.id}')">Delete</button></div>`).join('')||'<p>No relationships yet.</p>');
-}
-
+function renderRelationshipList(){safeHTML("relationshipList",relationships.map(r=>`<div class="rel-row"><div><strong>${relationshipSentence(r)}</strong></div><button class="danger" onclick="deleteRelationship('${r.id}')">Delete</button></div>`).join("")||"<p>No relationships yet.</p>")}
 function updateSide(){
   safeText("faceCount",currentPhoto?faces.filter(f=>f.photo_id===currentPhoto.id).length:0);safeText("namedCount",currentPhoto?faces.filter(f=>f.photo_id===currentPhoto.id&&f.person_id).length:0);
   renderPhotoComments();
@@ -821,27 +651,6 @@ function showDeathDateField(){
   if(wrap)wrap.outerHTML='<label>Death date<input id="editDeath" type="date" value=""></label>';
 }
 
-
-function setTreeMode(mode){
-  currentTreeMode=mode||"family";
-  localStorage.setItem("familyGraphTreeMode",currentTreeMode);
-  document.querySelectorAll(".tree-mode-btn").forEach(b=>b.classList.toggle("primary",b.dataset.mode===currentTreeMode));
-  renderGraph();
-}
-function setGraphFocus(id){
-  graphFocusId=id||null;
-  if(graphFocusId)localStorage.setItem("familyGraphFocusId",graphFocusId); else localStorage.removeItem("familyGraphFocusId");
-  renderGraph();
-}
-function initTreeControls(){
-  const sel=el("treeFocusSelect");
-  if(sel){
-    const rows=visiblePeople().sort((a,b)=>fullName(a).localeCompare(fullName(b)));
-    sel.innerHTML='<option value="">Whole archive</option>'+rows.map(p=>`<option value="${p.id}" ${p.id===graphFocusId?'selected':''}>${escapeHtml(fullName(p))}</option>`).join('');
-    if(graphFocusId && !person(graphFocusId))graphFocusId=null;
-  }
-  document.querySelectorAll(".tree-mode-btn").forEach(b=>b.classList.toggle("primary",b.dataset.mode===currentTreeMode));
-}
 function partnerPairs(){
   const out=[];const seen=new Set();
   relationships.filter(r=>r.relationship_type==="partner").forEach(r=>{
@@ -851,147 +660,58 @@ function partnerPairs(){
   });
   return out;
 }
-function directParentsOf(id){return relationships.filter(r=>r.relationship_type==="parent"&&r.to_person_id===id&&isRealPerson(person(r.from_person_id))).map(r=>r.from_person_id)}
-function directChildrenOf(id){return relationships.filter(r=>r.relationship_type==="parent"&&r.from_person_id===id&&isRealPerson(person(r.to_person_id))).map(r=>r.to_person_id)}
-function siblingsOf(id){
-  const out=new Set();
-  relationships.filter(r=>r.relationship_type==="sibling").forEach(r=>{
-    if(r.from_person_id===id && isRealPerson(person(r.to_person_id)))out.add(r.to_person_id);
-    if(r.to_person_id===id && isRealPerson(person(r.from_person_id)))out.add(r.from_person_id);
-  });
-  const ps=directParentsOf(id);
-  relationships.filter(r=>r.relationship_type==="parent"&&ps.includes(r.from_person_id)&&r.to_person_id!==id).forEach(r=>{if(isRealPerson(person(r.to_person_id)))out.add(r.to_person_id)});
-  return [...out];
+function parentsOf(id){return relationships.filter(r=>r.relationship_type==="parent"&&r.to_person_id===id&&isRealPerson(person(r.from_person_id))).map(r=>r.from_person_id)}
+function parentGroups(){
+  const byChild={};relationships.filter(r=>r.relationship_type==="parent"&&isRealPerson(person(r.from_person_id))&&isRealPerson(person(r.to_person_id))).forEach(r=>(byChild[r.to_person_id]||=[]).push(r.from_person_id));
+  const groups={};Object.entries(byChild).forEach(([child,parents])=>{const key=parents.slice().sort().join("|");if(!groups[key])groups[key]={parents:parents.slice().sort(),children:[]};groups[key].children.push(child)});
+  return Object.values(groups);
 }
-function inferredParentsOf(id){
-  const out=new Set(directParentsOf(id));
-  // Sibling links are used only to infer shared parents for layout.
-  siblingsOf(id).forEach(sib=>directParentsOf(sib).forEach(p=>out.add(p)));
-  return [...out];
-}
-function partnersOf(id){
-  const out=new Set();
-  partnerPairs().forEach(([a,b])=>{if(a===id)out.add(b);if(b===id)out.add(a)});
-  return [...out];
-}
-function parentMap(){const m={};visiblePeople().forEach(p=>m[p.id]=inferredParentsOf(p.id));return m}
-function childrenMap(parents=parentMap()){
-  const m={};Object.entries(parents).forEach(([child,ps])=>ps.forEach(p=>(m[p]||=[]).push(child)));return m;
-}
-function ancestorsOf(id,parents=parentMap(),seen=new Set()){
-  (parents[id]||[]).forEach(p=>{if(!seen.has(p)){seen.add(p);ancestorsOf(p,parents,seen)}});return seen;
-}
-function descendantsOf(id,children=childrenMap(),seen=new Set()){
-  (children[id]||[]).forEach(c=>{if(!seen.has(c)){seen.add(c);descendantsOf(c,children,seen)}});return seen;
-}
-function graphVisibleIds(){
-  const ids=new Set(visiblePeople().map(p=>p.id));
-  const focus=graphFocusId&&person(graphFocusId)?graphFocusId:null;
-  const parents=parentMap(), children=childrenMap(parents);
-  if(currentTreeMode==="ancestors"&&focus){ids.clear();ids.add(focus);ancestorsOf(focus,parents).forEach(x=>ids.add(x));}
-  else if(currentTreeMode==="descendants"&&focus){ids.clear();ids.add(focus);descendantsOf(focus,children).forEach(x=>ids.add(x));}
-  else if(currentTreeMode==="focus"&&focus){
-    ids.clear();ids.add(focus);partnersOf(focus).forEach(x=>ids.add(x));siblingsOf(focus).forEach(x=>ids.add(x));
-    (parents[focus]||[]).forEach(x=>ids.add(x));(children[focus]||[]).forEach(x=>ids.add(x));
-    [...ids].forEach(x=>{partnersOf(x).forEach(y=>ids.add(y));(parents[x]||[]).forEach(y=>ids.add(y));(children[x]||[]).forEach(y=>ids.add(y));});
-  }else if(currentTreeMode==="photo"&&currentPhoto){
-    ids.clear();faces.filter(f=>f.photo_id===currentPhoto.id&&f.person_id&&isRealPerson(person(f.person_id))).forEach(f=>ids.add(f.person_id));
-    [...ids].forEach(x=>partnersOf(x).forEach(y=>ids.add(y)));
-  }
-  // Always add visible partners for family context, but never treat partners as children of in-laws.
-  [...ids].forEach(x=>partnersOf(x).forEach(y=>ids.add(y)));
-  return ids;
-}
-function generationDepth(id,parents=parentMap(),seen=new Set()){
-  if(seen.has(id))return 0;seen.add(id);const ps=(parents[id]||[]).filter(p=>isRealPerson(person(p)));if(!ps.length)return 0;return 1+Math.max(...ps.map(p=>generationDepth(p,parents,new Set(seen))))
-}
-function familyParentGroups(ids=graphVisibleIds(),parents=parentMap()){
-  const groups={};
-  ids.forEach(child=>{
-    const ps=(parents[child]||[]).filter(p=>ids.has(p)); if(!ps.length)return;
-    const key=ps.slice().sort().join("|");
-    if(!groups[key])groups[key]={parents:ps.slice().sort(),children:[]};
-    groups[key].children.push(child);
-  });
-  return Object.values(groups).map(g=>{g.children.sort((a,b)=>fullName(person(a)).localeCompare(fullName(person(b))));return g});
-}
-function makeCoupleUnits(ids,depth){
-  const partner=new Map();partnerPairs().forEach(([a,b])=>{if(ids.has(a)&&ids.has(b)){partner.set(a,b);partner.set(b,a)}});
-  // Partners share row, but only the biological child receives parent connectors.
-  for(let i=0;i<5;i++)partnerPairs().forEach(([a,b])=>{if(ids.has(a)&&ids.has(b)){const d=Math.max(depth[a]||0,depth[b]||0);depth[a]=d;depth[b]=d}});
-  const unitsByRow={},used=new Set(),nodeW=148,gap=28;
-  [...ids].sort((a,b)=>fullName(person(a)).localeCompare(fullName(person(b)))).forEach(id=>{
-    if(used.has(id))return;
-    const q=partner.get(id);let members=[id];
-    if(q&&!used.has(q)&&(depth[q]||0)===(depth[id]||0)){
-      // Use parent/child role to put inherited-line person first when possible.
-      members=[id,q].sort((a,b)=>fullName(person(a)).localeCompare(fullName(person(b))));used.add(q);
-    }
-    used.add(id);const d=depth[id]||0;(unitsByRow[d]||=[]).push({members,x:0,width:members.length*nodeW+(members.length-1)*gap});
-  });
-  return unitsByRow;
+function generationDepth(id,seen=new Set()){
+  if(seen.has(id))return 0;seen.add(id);const ps=parentsOf(id);if(!ps.length)return 0;return 1+Math.max(...ps.map(p=>generationDepth(p,seen)))
 }
 function layoutPositions(){
-  const ids=graphVisibleIds(), parents=parentMap(), depth={}, pos={}, nodeW=148, nodeH=132, memberGap=28, rowGap=280, startY=150;
-  ids.forEach(id=>depth[id]=generationDepth(id,parents));
-  const unitsByRow=makeCoupleUnits(ids,depth);
-  Object.entries(unitsByRow).forEach(([d,units])=>{let x=220;units.forEach(u=>{u.x=x;x+=u.width+92});});
+  const real=visiblePeople(), pos={}, nodeW=178, unitGap=46, rowGap=360, startY=130;
+  const partner=new Map();partnerPairs().forEach(([a,b])=>{partner.set(a,b);partner.set(b,a)});
+  const depth={};real.forEach(p=>depth[p.id]=generationDepth(p.id));
+  // Partners should sit on the same generation as the known partner.
+  for(let i=0;i<6;i++)partnerPairs().forEach(([a,b])=>{const d=Math.max(depth[a]||0,depth[b]||0);depth[a]=d;depth[b]=d});
+  const unitsByRow={};const used=new Set();
+  real.forEach(p=>{
+    if(used.has(p.id))return;const q=partner.get(p.id);
+    let members=[p.id];
+    if(q&&!used.has(q)&&(depth[q]||0)===(depth[p.id]||0)){members=[p.id,q].sort((a,b)=>fullName(person(a)).localeCompare(fullName(person(b))));used.add(q)}
+    used.add(p.id);const d=depth[p.id]||0;(unitsByRow[d]||=[]).push({members,x:0,width:members.length*nodeW+(members.length-1)*unitGap});
+  });
+  Object.values(unitsByRow).forEach(units=>units.sort((u,v)=>fullName(person(u.members[0])).localeCompare(fullName(person(v.members[0])))));
+  Object.entries(unitsByRow).forEach(([d,units])=>{let x=420;units.forEach(u=>{u.x=x;x+=u.width+110});});
   const findUnit=id=>Object.values(unitsByRow).flat().find(u=>u.members.includes(id));
-  const centerOfId=id=>{const u=findUnit(id),i=u?u.members.indexOf(id):0;return u?u.x+i*(nodeW+memberGap)+nodeW/2:0};
-  const groups=familyParentGroups(ids,parents).sort((a,b)=>Math.min(...a.parents.map(p=>depth[p]||0))-Math.min(...b.parents.map(p=>depth[p]||0)));
-  groups.forEach(g=>{
-    const childUnits=[...new Set(g.children.map(findUnit).filter(Boolean))]; if(!childUnits.length)return;
-    const parentCenters=g.parents.map(centerOfId).filter(Boolean); if(!parentCenters.length)return;
-    const pc=parentCenters.reduce((s,v)=>s+v,0)/parentCenters.length;
-    const total=childUnits.reduce((s,u)=>s+u.width,0)+(childUnits.length-1)*72;
-    let x=pc-total/2;childUnits.forEach(u=>{u.x=x;x+=u.width+72});
+  const unitCenter=u=>u.x+u.width/2;
+  const setUnitX=(u,x)=>{u.x=x};
+  parentGroups().sort((a,b)=>Math.max(...a.parents.map(id=>depth[id]||0))-Math.max(...b.parents.map(id=>depth[id]||0))).forEach(g=>{
+    const parentUnits=[...new Set(g.parents.map(findUnit).filter(Boolean))];
+    const childUnits=[...new Set(g.children.map(findUnit).filter(Boolean))];
+    if(!parentUnits.length||!childUnits.length)return;
+    const pc=parentUnits.reduce((s,u)=>s+unitCenter(u),0)/parentUnits.length;
+    const total=childUnits.reduce((s,u)=>s+u.width,0)+(childUnits.length-1)*70;
+    let x=pc-total/2;childUnits.forEach(u=>{setUnitX(u,x);x+=u.width+70});
   });
   Object.entries(unitsByRow).forEach(([d,units])=>{
     units.sort((a,b)=>a.x-b.x);let min=120;
-    units.forEach(u=>{if(u.x<min)u.x=min;min=u.x+u.width+72});
+    units.forEach(u=>{if(u.x<min)u.x=min;min=u.x+u.width+70});
     const y=startY+Number(d)*rowGap;
-    units.forEach(u=>u.members.forEach((id,i)=>{pos[id]={x:u.x+i*(nodeW+memberGap),y,unit:u,depth:Number(d)}}));
+    units.forEach(u=>u.members.forEach((id,i)=>{pos[id]={x:u.x+i*(nodeW+unitGap),y,unit:u}}));
   });
-  return {pos,ids,parents,groups,nodeW,nodeH};
-}
-function photoNetworkLayout(){
-  const ids=graphVisibleIds(), pos={}, nodeW=148,nodeH=132; const arr=[...ids]; const cx=720,cy=430,r=Math.max(220,arr.length*42);
-  arr.forEach((id,i)=>{const a=(Math.PI*2*i/Math.max(1,arr.length))-Math.PI/2;pos[id]={x:cx+Math.cos(a)*r,y:cy+Math.sin(a)*r,depth:0}});
-  return {pos,ids,parents:parentMap(),groups:[],nodeW,nodeH,network:true};
+  return pos;
 }
 async function renderGraph(){
-  const graph=el("graph");if(!graph)return;
-  initTreeControls();
-  graph.innerHTML='<div class="graph-inner" id="graphInner"></div>';
-  const inner=el("graphInner");
-  const data=currentTreeMode==="photo"?photoNetworkLayout():layoutPositions();
-  const {pos,ids,parents,groups,nodeW,nodeH,network}=data;
-  if(!ids.size){inner.innerHTML='<div class="graph-empty">No people to show in this view.</div>';return;}
-  if(network){
-    const arr=[...ids];
-    for(let i=0;i<arr.length;i++)for(let j=i+1;j<arr.length;j++){drawSoft(inner,pos[arr[i]].x+nodeW/2,pos[arr[i]].y+nodeH/2,pos[arr[j]].x+nodeW/2,pos[arr[j]].y+nodeH/2,"photo-line")}
-  }else{
-    partnerPairs().forEach(([a,b])=>{if(!ids.has(a)||!ids.has(b)||!pos[a]||!pos[b])return;const left=pos[a].x<pos[b].x?a:b,right=left===a?b:a;const y=pos[left].y+56;drawH(inner,pos[left].x+nodeW,y,pos[right].x-(pos[left].x+nodeW));label(inner,(pos[left].x+nodeW+pos[right].x)/2-34,y-25,"Partner")});
-    groups.forEach(group=>{
-      const ps=group.parents.filter(id=>ids.has(id)&&pos[id]),cs=group.children.filter(id=>ids.has(id)&&pos[id]);if(!ps.length||!cs.length)return;
-      const parentBottom=Math.max(...ps.map(id=>pos[id].y+nodeH));
-      const childTop=Math.min(...cs.map(id=>pos[id].y));
-      const busY=(parentBottom+childTop)/2;
-      const parentCenters=ps.map(id=>pos[id].x+nodeW/2);
-      const pc=parentCenters.reduce((s,v)=>s+v,0)/parentCenters.length;
-      drawV(inner,pc,parentBottom,busY-parentBottom);
-      const childCenters=cs.map(id=>pos[id].x+nodeW/2);
-      const left=Math.min(...childCenters),right=Math.max(...childCenters);
-      drawH(inner,left,busY,right-left);
-      cs.forEach(id=>drawV(inner,pos[id].x+nodeW/2,busY,pos[id].y-busY));
-    });
-    // Sibling-only links are hints only, not structural parent/child edges.
-    relationships.filter(r=>r.relationship_type==="sibling").forEach(r=>{if(ids.has(r.from_person_id)&&ids.has(r.to_person_id)&&pos[r.from_person_id]&&pos[r.to_person_id])drawSoft(inner,pos[r.from_person_id].x+nodeW/2,pos[r.from_person_id].y+nodeH/2,pos[r.to_person_id].x+nodeW/2,pos[r.to_person_id].y+nodeH/2,"sibling-line")});
-  }
-  for(const id of ids){const p=person(id),xy=pos[id]||{x:100,y:100}; if(!p)continue; const n=document.createElement("button");n.className="node tree-node"+(id===graphFocusId?" focus-node":"");n.style.left=xy.x+"px";n.style.top=xy.y+"px";n.onclick=()=>setGraphFocus(id);n.innerHTML=`${await photoHtml(p)}<strong>${escapeHtml(fullName(p))}</strong><span class="small">${p.birth_date||""}${p.death_date?" – "+p.death_date:""}</span>`;inner.appendChild(n)}
-  applyGraphZoom();
+  const graph=el("graph");if(!graph)return;graph.innerHTML='<div class="graph-inner" id="graphInner"></div>';const inner=el("graphInner"),pos=layoutPositions(), nodeW=178, nodeH=156;
+  // Partner lines only connect cards on the same level.
+  partnerPairs().forEach(([a,b])=>{if(!pos[a]||!pos[b])return;const left=pos[a].x<pos[b].x?a:b,right=left===a?b:a;const y=pos[left].y+74;drawH(inner,pos[left].x+nodeW,y,pos[right].x-(pos[left].x+nodeW));label(inner,(pos[left].x+nodeW+pos[right].x)/2-38,y-27,"Partner")});
+  // Parent buses. Sibling relationships are intentionally not drawn; shared parents imply siblings.
+  parentGroups().forEach(group=>{const parents=group.parents.filter(id=>pos[id]),children=group.children.filter(id=>pos[id]);if(!parents.length||!children.length)return;const pc=parents.reduce((s,id)=>s+pos[id].x+nodeW/2,0)/parents.length,parentBottom=Math.max(...parents.map(id=>pos[id].y+nodeH)),childTop=Math.min(...children.map(id=>pos[id].y)),busY=(parentBottom+childTop)/2;drawV(inner,pc,parentBottom,busY-parentBottom);const left=Math.min(...children.map(id=>pos[id].x+nodeW/2)),right=Math.max(...children.map(id=>pos[id].x+nodeW/2));drawH(inner,left,busY,right-left);children.forEach(id=>drawV(inner,pos[id].x+nodeW/2,busY,pos[id].y-busY))});
+  for(const p of visiblePeople()){const xy=pos[p.id]||{x:100,y:100},n=document.createElement("div");n.className="node";n.style.left=xy.x+"px";n.style.top=xy.y+"px";n.innerHTML=`${await photoHtml(p)}<strong>${escapeHtml(fullName(p))}</strong><span class="small">${p.birth_date||""}${p.death_date?" – "+p.death_date:""}</span>`;inner.appendChild(n)}
+  applyGraphZoom()
 }
-function drawSoft(g,x1,y1,x2,y2,cls){const e=document.createElement("div");e.className="soft-edge "+(cls||"");const dx=x2-x1,dy=y2-y1,len=Math.hypot(dx,dy),ang=Math.atan2(dy,dx)*180/Math.PI;e.style.left=x1+"px";e.style.top=y1+"px";e.style.width=len+"px";e.style.transform=`rotate(${ang}deg)`;g.appendChild(e)}
 function drawH(g,x,y,w){const e=document.createElement("div");e.className="line h";if(w<0){e.style.left=x+w+"px";e.style.width=-w+"px"}else{e.style.left=x+"px";e.style.width=w+"px"}e.style.top=y+"px";g.appendChild(e)}
 function drawV(g,x,y,h){const e=document.createElement("div");e.className="line v";e.style.left=x+"px";e.style.top=y+"px";e.style.height=Math.max(0,h)+"px";g.appendChild(e)}
 function label(g,x,y,text){const e=document.createElement("div");e.className="rel-label";e.style.left=x+"px";e.style.top=y+"px";e.textContent=text;g.appendChild(e)}
@@ -1000,5 +720,111 @@ function zoomGraph(delta){const wrap=el("graphWrap");if(!wrap)return;const old=g
 function resetGraphZoom(){graphScale=1;applyGraphZoom()}
 function fitGraph(){const wrap=el("graphWrap");if(!wrap)return;graphScale=.72;applyGraphZoom();wrap.scrollLeft=120;wrap.scrollTop=80}
 
-Object.assign(window,{renderRelationshipAssistant,queueRelationshipAssistantRender,saveAssistantRelationships,setTreeMode,setGraphFocus,attachFaceToExisting,selectPhotoById,previousPhoto,nextPhoto,detectFacesOnPhoto,setEditMode,addPhotoComment,suggestSelectedFaceName,suggestFaceForPhoto,newFeedbackPrompt,setSuggestionStatus,setFeedbackStatus,showDeathDateField,sendLogin,signOut,showPage,refreshData,uploadPhoto,selectLatestPhoto,addFaceBox,deleteSelectedFace,saveFaceName,setRel,saveRelationship,deleteRelationship,renderGraph,fitGraph,zoomGraph,resetGraphZoom,addUnknownPerson,deletePerson,toggleFaceBoxes,toggleFaceNames,applyTheme,titleCaseName,showDbTab,renderDatabase,selectDbPerson,selectDbPhoto,savePersonRecord,savePhotoRecord});
+Object.assign(window,{attachFaceToExisting,selectPhotoById,previousPhoto,nextPhoto,detectFacesOnPhoto,setEditMode,addPhotoComment,suggestSelectedFaceName,suggestFaceForPhoto,newFeedbackPrompt,setSuggestionStatus,setFeedbackStatus,showDeathDateField,sendLogin,signOut,showPage,refreshData,uploadPhoto,selectLatestPhoto,addFaceBox,deleteSelectedFace,saveFaceName,setRel,saveRelationship,deleteRelationship,renderGraph,fitGraph,zoomGraph,resetGraphZoom,addUnknownPerson,deletePerson,toggleFaceBoxes,toggleFaceNames,applyTheme,titleCaseName,showDbTab,renderDatabase,selectDbPerson,selectDbPhoto,savePersonRecord,savePhotoRecord});
 boot();
+
+/* === Functional polish pass: dashboard, people profiles, admin visibility, tree clicks === */
+function profilePersonId(){return currentProfile?.person_id || localStorage.getItem('familyGraph:profilePersonId') || null}
+function canAdmin(){return ['owner','editor','family editor'].includes(role())}
+function setModeClasses(){document.body.classList.toggle('can-edit',canEdit());document.body.classList.toggle('can-delete',canDelete());document.body.classList.toggle('edit-mode',editMode);document.body.classList.toggle('can-admin',canAdmin());}
+
+function updateDashboard(){
+  safeText('peopleTotal',people.length); safeText('photosTotal',photos.length); safeText('facesTotal',faces.length); safeText('relationshipsTotal',relationships.length);
+  renderDashboardExtras?.();
+}
+async function renderDashboardExtras(){
+  const photoBox=el('dashboardPhotos'), taskBox=el('dashboardTasks'), peopleBox=el('dashboardPeople');
+  if(photoBox){
+    let html='';
+    for(const ph of photos.slice(0,6)){
+      const url=await photoUrl(ph); const c=faces.filter(f=>f.photo_id===ph.id).length;
+      html+=`<button class="mini-photo" onclick="selectPhotoById('${ph.id}');showPage('photo')"><img src="${url}" alt=""><span>${escapeHtml(photoTitle(ph))}<small>${c} face${c===1?'':'s'}</small></span></button>`;
+    }
+    photoBox.innerHTML=html||'<p class="small">No photos yet.</p>';
+  }
+  if(taskBox){
+    const unknown=faces.filter(f=>!f.person_id).length;
+    const noDates=visiblePeople().filter(p=>!p.birth_date).length;
+    const profileLinked=!!profilePersonId();
+    taskBox.innerHTML=`
+      <button onclick="showPage('photo')"><b>${unknown}</b><span>Unnamed faces to identify</span></button>
+      <button onclick="showPage('people')"><b>${noDates}</b><span>People without birth dates</span></button>
+      <button onclick="showPage('people')"><b>${profileLinked?'✓':'!'}</b><span>${profileLinked?'Your login is linked to a person':'Link your login to your person record'}</span></button>`;
+  }
+  if(peopleBox){
+    const rows=visiblePeople().slice().sort((a,b)=>fullName(a).localeCompare(fullName(b))).slice(0,8);
+    let html='';
+    for(const p of rows){html+=`<button onclick="showPerson('${p.id}')">${await photoHtml(p)}<span>${escapeHtml(fullName(p))}<small>${escapeHtml(p.birth_date||'')}</small></span></button>`}
+    peopleBox.innerHTML=html||'<p class="small">No people yet.</p>';
+  }
+}
+
+function showPerson(id){selectedPersonId=id;showPage('person');renderPersonProfile();}
+async function renderPersonProfile(){
+  const box=el('personProfile'); if(!box)return;
+  const p=person(selectedPersonId)||visiblePeople().slice().sort((a,b)=>fullName(a).localeCompare(fullName(b)))[0];
+  if(!p){box.innerHTML='<p>No person selected.</p>';return}
+  selectedPersonId=p.id;
+  const rels=relationships.filter(r=>r.from_person_id===p.id||r.to_person_id===p.id);
+  const tagged=faces.filter(f=>f.person_id===p.id);
+  const photoIds=[...new Set(tagged.map(f=>f.photo_id))];
+  let photosHtml='';
+  for(const pid of photoIds.slice(0,12)){const ph=photos.find(x=>x.id===pid); if(!ph)continue; photosHtml+=`<button class="mini-photo" onclick="selectPhotoById('${ph.id}');showPage('photo')"><img src="${await photoUrl(ph)}" alt=""><span>${escapeHtml(photoTitle(ph))}</span></button>`}
+  box.innerHTML=`
+    <div class="person-hero card">
+      ${await photoHtml(p)}
+      <div><h2>${escapeHtml(fullName(p))}</h2><p>${escapeHtml(p.birth_date||'')}${p.death_date?' – '+escapeHtml(p.death_date):''}</p><p class="small">${tagged.length} tagged face${tagged.length===1?'':'s'} · ${rels.length} direct relationship${rels.length===1?'':'s'}</p></div>
+      <div class="person-actions">
+        <button class="primary" onclick="focusTreeOnPerson('${p.id}')">Focus in tree</button>
+        <button onclick="linkMyProfileToPerson('${p.id}')">Link my login to this person</button>
+      </div>
+    </div>
+    <div class="person-profile-grid">
+      <section class="card"><h2>Photos</h2><div class="mini-photo-grid">${photosHtml||'<p class="small">No tagged photos yet.</p>'}</div></section>
+      <section class="card"><h2>Direct relationships</h2><div class="relationship-list">${rels.map(r=>`<div class="rel-row"><strong>${escapeHtml(relationshipSentence(r))}</strong></div>`).join('')||'<p class="small">No direct relationships yet.</p>'}</div></section>
+    </div>`;
+}
+async function linkMyProfileToPerson(id){
+  const p=person(id); if(!p)return;
+  try{const r=await sb.from('profiles').update({person_id:id}).eq('user_id',session.user.id).select().single(); if(!r.error){currentProfile=Object.assign(currentProfile||{},r.data);}}
+  catch(e){}
+  localStorage.setItem('familyGraph:profilePersonId',id);
+  alert(`This login is now linked to ${fullName(p)} on this browser${currentProfile?.person_id?' and in Supabase.':'.'} `);
+  updateDashboard(); renderPersonProfile();
+}
+function focusTreeOnPerson(id){selectedPersonId=id;showPage('graph');setTimeout(()=>{const sel=el('treeFocusPerson'); if(sel)sel.value=id; renderGraph();},0)}
+
+async function renderPeople(){
+  const list=el('peopleList');if(!list)return;let html='';
+  const rows=people.slice().filter(isRealPerson).sort((a,b)=>fullName(a).localeCompare(fullName(b)));
+  for(const p of rows){html+=`<button class="people-card person-button" onclick="showPerson('${p.id}')">${await photoHtml(p)}<strong>${escapeHtml(fullName(p))}</strong><p>${p.birth_date||'No dates yet'}${p.death_date?' – '+p.death_date:''}</p></button>`}
+  list.innerHTML=html||'<p>No people yet.</p>';
+}
+
+function showPage(page){
+  page = page || 'dashboard';
+  if(!el(page+'Page')) page = 'dashboard';
+  if(page==='admin' && !canAdmin()) page='dashboard';
+  document.querySelectorAll('.page').forEach(p=>p.classList.add('hidden'));
+  el(page+'Page')?.classList.remove('hidden');
+  document.querySelectorAll('nav button[data-page]').forEach(b=>b.classList.toggle('primary', b.dataset.page===page));
+  if(location.hash !== '#'+page) history.replaceState(null,'','#'+page);
+  if(page!=='photo'){ selectedFaceId=null; renderFaceEditor?.(); }
+  if(page==='dashboard') updateDashboard();
+  if(page==='photo'){renderCurrentPhoto();updateSide();renderPhotoList()}
+  if(page==='people'){renderPeople()}
+  if(page==='person'){renderPersonProfile()}
+  if(page==='relationships'){renderRelationshipList()}
+  if(page==='admin'){renderDatabase()}
+  if(page==='review'){renderReview()}
+  if(page==='graph'){renderGraph();setTimeout(fitGraph,0)}
+}
+
+// Make tree nodes clickable and keep avatars stable. This reuses the existing layout engine for now.
+async function renderGraph(){
+  const graph=el('graph');if(!graph)return;graph.innerHTML='<div class="graph-inner" id="graphInner"></div>';const inner=el('graphInner'),pos=layoutPositions(), nodeW=178, nodeH=156;
+  partnerPairs().forEach(([a,b])=>{if(!pos[a]||!pos[b])return;const left=pos[a].x<pos[b].x?a:b,right=left===a?b:a;const y=pos[left].y+74;drawH(inner,pos[left].x+nodeW,y,pos[right].x-(pos[left].x+nodeW));label(inner,(pos[left].x+nodeW+pos[right].x)/2-38,y-27,'Partner')});
+  parentGroups().forEach(group=>{const parents=group.parents.filter(id=>pos[id]),children=group.children.filter(id=>pos[id]);if(!parents.length||!children.length)return;const pc=parents.reduce((s,id)=>s+pos[id].x+nodeW/2,0)/parents.length,parentBottom=Math.max(...parents.map(id=>pos[id].y+nodeH)),childTop=Math.min(...children.map(id=>pos[id].y)),busY=(parentBottom+childTop)/2;drawV(inner,pc,parentBottom,busY-parentBottom);const left=Math.min(...children.map(id=>pos[id].x+nodeW/2)),right=Math.max(...children.map(id=>pos[id].x+nodeW/2));drawH(inner,left,busY,right-left);children.forEach(id=>drawV(inner,pos[id].x+nodeW/2,busY,pos[id].y-busY))});
+  for(const p of visiblePeople()){const xy=pos[p.id]||{x:100,y:100},n=document.createElement('button');n.className='node tree-node';n.style.left=xy.x+'px';n.style.top=xy.y+'px';n.onclick=()=>showPerson(p.id);n.innerHTML=`${await photoHtml(p)}<strong>${escapeHtml(fullName(p))}</strong><span class="small">${p.birth_date||''}${p.death_date?' – '+p.death_date:''}</span>`;inner.appendChild(n)}
+  applyGraphZoom();
+}
