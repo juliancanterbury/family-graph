@@ -75,96 +75,17 @@ async function saveCurrentPhotoDetails(){if(!currentPhoto)return; const patch={}
 function toggleFaceBoxes(){showFaceBoxes=!showFaceBoxes;renderCurrentPhoto();safeText('boxToggleText',showFaceBoxes?'Hide boxes':'Show boxes')}
 function toggleFaceNames(){showFaceNames=!showFaceNames;renderCurrentPhoto();safeText('nameToggleText',showFaceNames?'Hide names':'Show names')}
 
-
-function selectFaceForEditing(id, focusName=false){
-  selectedFaceId=id;
-  document.querySelectorAll('.face').forEach(node=>node.classList.toggle('selected', node.dataset.faceId===id));
-  renderFaceEditor();
-  if(focusName){
-    setTimeout(()=>{
-      const input=el('faceName');
-      if(input){ input.focus(); input.select(); }
-    },0);
-  }
-}
-
-function faceElement(f){
-  const d=document.createElement('div');
-  d.className='face'+(f.person_id?' named':'')+(f.id===selectedFaceId?' selected':'')+(!f.person_id?' unknown':'');
-  d.dataset.faceId=f.id;
-  d.style.left=Number(f.x)+'px';d.style.top=Number(f.y)+'px';d.style.width=Number(f.w)+'px';d.style.height=Number(f.h)+'px';
-  const label=f.label || (f.id===selectedFaceId?'Unnamed face':'');
-  d.innerHTML=`<span>${escapeHtml(label)}</span><div class="handle"></div>`;
-  d.addEventListener('pointerdown',ev=>startDrag(ev,f.id));
-  d.querySelector('.handle').addEventListener('pointerdown',ev=>startResize(ev,f.id));
-  d.addEventListener('click',ev=>{ev.stopPropagation();selectFaceForEditing(f.id,false)});
-  d.addEventListener('dblclick',ev=>{ev.stopPropagation();selectFaceForEditing(f.id,true)});
-  return d
-}
+function faceElement(f){const d=document.createElement('div'); d.className='face'+(f.person_id?' named':'')+(f.id===selectedFaceId?' selected':''); d.style.left=Number(f.x)+'px';d.style.top=Number(f.y)+'px';d.style.width=Number(f.w)+'px';d.style.height=Number(f.h)+'px'; d.innerHTML=`<span>${escapeHtml(f.label||'')}</span><div class="handle"></div>`; d.addEventListener('pointerdown',ev=>startDrag(ev,f.id)); d.querySelector('.handle').addEventListener('pointerdown',ev=>startResize(ev,f.id)); d.addEventListener('click',ev=>{ev.stopPropagation();selectedFaceId=f.id;renderCurrentPhoto();renderFaceEditor()}); return d}
 async function addFaceBox(){if(!currentPhoto)return alert('Upload a photo first.'); const ins=await sb.from('faces').insert({photo_id:currentPhoto.id,x:200,y:160,w:80,h:100,label:null,status:'manual',created_by:session.user.id}).select().single(); if(ins.error){alert(ins.error.message);return} faces.push(ins.data); selectedFaceId=ins.data.id; updateDashboard(); await renderCurrentPhoto();updateSide();setStatus('Face saved')}
 let dragState=null;
-function startDrag(ev,id){
-  if(ev.target.classList.contains('handle'))return;
-  selectFaceForEditing(id,false);
-  if(!editMode)return;
-  ev.preventDefault();ev.stopPropagation();
-  const f=faces.find(x=>x.id===id); if(!f)return;
-  dragState={mode:'drag',id,startX:ev.clientX,startY:ev.clientY,x:Number(f.x),y:Number(f.y)};
-  ev.currentTarget.setPointerCapture(ev.pointerId);
-  window.addEventListener('pointermove',onPointerMove);window.addEventListener('pointerup',endPointer)
-}
+function startDrag(ev,id){if(ev.target.classList.contains('handle'))return; if(!editMode)return; ev.preventDefault();ev.stopPropagation(); selectedFaceId=id; const f=faces.find(x=>x.id===id); if(!f)return; dragState={mode:'drag',id,startX:ev.clientX,startY:ev.clientY,x:Number(f.x),y:Number(f.y)}; ev.currentTarget.setPointerCapture(ev.pointerId); window.addEventListener('pointermove',onPointerMove);window.addEventListener('pointerup',endPointer); renderCurrentPhoto();renderFaceEditor()}
 function startResize(ev,id){if(!editMode)return; ev.preventDefault();ev.stopPropagation(); selectedFaceId=id; const f=faces.find(x=>x.id===id); if(!f)return; dragState={mode:'resize',id,startX:ev.clientX,startY:ev.clientY,w:Number(f.w),h:Number(f.h)}; ev.currentTarget.parentElement.setPointerCapture(ev.pointerId); window.addEventListener('pointermove',onPointerMove);window.addEventListener('pointerup',endPointer)}
 function onPointerMove(ev){if(!dragState)return; const f=faces.find(x=>x.id===dragState.id); if(!f)return; if(dragState.mode==='drag'){f.x=Math.max(0,dragState.x+ev.clientX-dragState.startX);f.y=Math.max(0,dragState.y+ev.clientY-dragState.startY)}else{f.w=Math.max(30,dragState.w+ev.clientX-dragState.startX);f.h=Math.max(30,dragState.h+ev.clientY-dragState.startY)} const box=document.querySelector('.face.selected'); if(box){box.style.left=f.x+'px';box.style.top=f.y+'px';box.style.width=f.w+'px';box.style.height=f.h+'px'}}
 async function endPointer(){if(dragState){const f=faces.find(x=>x.id===dragState.id); if(f)await sb.from('faces').update({x:f.x,y:f.y,w:f.w,h:f.h}).eq('id',f.id)} dragState=null;window.removeEventListener('pointermove',onPointerMove);window.removeEventListener('pointerup',endPointer)}
 async function deleteSelectedFace(){if(!canDelete())return alert('Only the archive owner can delete face boxes.'); if(!selectedFaceId)return; const del=await sb.from('faces').delete().eq('id',selectedFaceId); if(del.error){alert(del.error.message);return} faces=faces.filter(f=>f.id!==selectedFaceId); selectedFaceId=null; updateDashboard(); await renderCurrentPhoto();updateSide()}
-function renderFaceEditor(){
-  const w=el('faceEditor'); if(!w)return;
-  const f=faces.find(x=>x.id===selectedFaceId);
-  if(!f){w.innerHTML='<p>Select or add a face box.</p><button class="full" onclick="suggestFaceForPhoto()">Suggest a face/name</button>';return}
-  const p=f.person_id?person(f.person_id):null;
-  if(!canEdit()){
-    w.innerHTML=`<p><strong>${escapeHtml(p?fullName(p):(f.label||'Unnamed face'))}</strong></p><textarea id="faceSuggestionText" placeholder="Suggest a correction…"></textarea><button class="primary full" onclick="suggestSelectedFaceName()">Send suggestion</button>`;return
-  }
-  const opts=['<option value="">Choose existing person…</option>'].concat(visiblePeople().sort((a,b)=>fullName(a).localeCompare(fullName(b))).map(pp=>`<option value="${pp.id}" ${pp.id===f.person_id?'selected':''}>${escapeHtml(fullName(pp))}</option>`)).join('');
-  const current=p?fullName(p):(f.label||'Unnamed face');
-  const typed=p?'':(f.label||'');
-  w.innerHTML=`
-    <div class="selected-face-summary"><p class="small">Current</p><strong>${escapeHtml(current)}</strong></div>
-    <div class="form-grid compact-form">
-      <label>Use existing person<select id="existingPersonSelect">${opts}</select></label>
-      <button class="primary full" onclick="attachFaceToExisting()">Use selected person</button>
-      <label>Create new person<input id="faceName" value="${escapeHtml(typed)}" placeholder="Type a new full name" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();saveFaceName()}" onblur="this.value=titleCaseName(this.value)"></label>
-      <button class="full" onclick="saveFaceName()">Create / save typed name</button>
-      ${p?'<button class="full" onclick="unlinkSelectedFace()">Unlink this face</button>':''}
-      <button class="full" onclick="suggestSelectedFaceName()">Suggest correction instead</button>
-    </div>`
-}
-async function unlinkSelectedFace(){
-  const f=faces.find(x=>x.id===selectedFaceId); if(!f)return;
-  const upd=await sb.from('faces').update({person_id:null,label:null,status:'unconfirmed'}).eq('id',f.id).select().single();
-  if(upd.error){alert(upd.error.message);return}
-  Object.assign(f,upd.data);
-  await renderCurrentPhoto();renderFaceEditor();updateSide();await renderPeople();await renderPhotoSidebar();updateDashboard();setStatus('Face unlinked')
-}
+function renderFaceEditor(){const w=el('faceEditor'); if(!w)return; const f=faces.find(x=>x.id===selectedFaceId); if(!f){w.innerHTML='<p>Select or add a face box.</p><button class="full" onclick="suggestFaceForPhoto()">Suggest a face/name</button>';return} const p=f.person_id?person(f.person_id):null; if(!canEdit()){w.innerHTML=`<p><strong>${escapeHtml(p?fullName(p):(f.label||'Unnamed'))}</strong></p><textarea id="faceSuggestionText" placeholder="Suggest a correction…"></textarea><button class="primary full" onclick="suggestSelectedFaceName()">Send suggestion</button>`;return} const opts=['<option value="">Choose existing person…</option>'].concat(visiblePeople().map(pp=>`<option value="${pp.id}" ${pp.id===f.person_id?'selected':''}>${escapeHtml(fullName(pp))}</option>`)).join(''); w.innerHTML=`<div class="selected-face-summary"><p class="small">Current</p><strong>${escapeHtml(p?fullName(p):(f.label||'Unnamed face'))}</strong></div><div class="form-grid compact-form"><label>Use existing person<select id="existingPersonSelect">${opts}</select></label><button class="primary full" onclick="attachFaceToExisting()">Use selected person</button><label>Create new person<input id="faceName" value="${escapeHtml(p?fullName(p):(f.label||''))}" placeholder="Type a new full name" onblur="this.value=titleCaseName(this.value)"></label><button class="full" onclick="saveFaceName()">Create / save typed name</button><button class="full" onclick="suggestSelectedFaceName()">Suggest correction instead</button></div>`}
 async function attachFaceToExisting(){const f=faces.find(x=>x.id===selectedFaceId),pid=el('existingPersonSelect')?.value; if(!f||!pid)return alert('Choose an existing person first.'); const p=person(pid); const upd=await sb.from('faces').update({person_id:p.id,label:fullName(p),status:'confirmed'}).eq('id',f.id).select().single(); if(upd.error){alert(upd.error.message);return} Object.assign(f,upd.data); await renderCurrentPhoto();updateSide();await renderPeople();await renderPhotoSidebar();updateDashboard();setStatus('Face linked')}
-async function saveFaceName(){
-  const f=faces.find(x=>x.id===selectedFaceId);
-  const raw=(el('faceName')?.value||'').replace(/\s+/g,' ').trim();
-  const name=titleCaseName(raw);
-  if(!f||!name)return alert('Type a name first, or choose an existing person.');
-  if(['unknown','unknown person','unnamed','unnamed person'].includes(name.toLowerCase()))return alert('Please enter a real name, or leave it blank until known.');
-  let p=people.find(p=>fullName(p).toLowerCase()===name.toLowerCase());
-  if(!p){
-    const parts=name.split(' ');
-    const ins=await sb.from('people').insert({display_name:name,given_names:parts[0]||name,family_name:parts.slice(1).join(' ')||null,created_by:session.user.id}).select().single();
-    if(ins.error){alert(ins.error.message);return}
-    p=ins.data; people.push(p)
-  }
-  const upd=await sb.from('faces').update({person_id:p.id,label:fullName(p),status:'confirmed'}).eq('id',f.id).select().single();
-  if(upd.error){alert(upd.error.message);return}
-  Object.assign(f,upd.data);
-  await renderCurrentPhoto();renderFaceEditor();updateSide();await renderPeople();await renderPhotoSidebar();updateDashboard();setStatus('Face named')
-}
+async function saveFaceName(){const f=faces.find(x=>x.id===selectedFaceId); const name=titleCaseName(el('faceName')?.value||''); if(!f||!name)return; if(['unknown','unknown person','unnamed','unnamed person'].includes(name.toLowerCase()))return alert('Please enter a real name, or leave it blank until known.'); let p=people.find(p=>fullName(p).toLowerCase()===name.toLowerCase()); if(!p){const parts=name.split(' '); const ins=await sb.from('people').insert({display_name:name,given_names:parts[0]||name,family_name:parts.slice(1).join(' ')||null,created_by:session.user.id}).select().single(); if(ins.error){alert(ins.error.message);return} p=ins.data; people.push(p)} const upd=await sb.from('faces').update({person_id:p.id,label:fullName(p),status:'confirmed'}).eq('id',f.id).select().single(); if(upd.error){alert(upd.error.message);return} Object.assign(f,upd.data); await renderCurrentPhoto();updateSide();await renderPeople();await renderPhotoSidebar();updateDashboard()}
 function waitForImage(img){return new Promise((res,rej)=>{if(!img)return rej(new Error('Photo element missing.')); if(img.complete&&img.naturalWidth)return res(img); img.onload=()=>res(img); img.onerror=()=>rej(new Error('Photo failed to load.'))})}
 function timeoutPromise(ms){return new Promise((_,rej)=>setTimeout(()=>rej(new Error('Face detector timed out. Use manual Add face box.')),ms))}
 async function ensureHumanDetector(){if(humanReadyPromise)return humanReadyPromise; humanReadyPromise=(async()=>{if(!window.Human)throw new Error('Face detector library did not load.'); humanDetector=new Human.Human({modelBasePath:'https://cdn.jsdelivr.net/npm/@vladmandic/human/models/',backend:'webgl',face:{enabled:true,detector:{enabled:true,rotation:true,maxDetected:100},mesh:{enabled:false},iris:{enabled:false},description:{enabled:false},emotion:{enabled:false}},body:{enabled:false},hand:{enabled:false},object:{enabled:false},gesture:{enabled:false},filter:{enabled:false}}); setStatus('Loading face detector…'); await humanDetector.load(); await humanDetector.warmup(); return humanDetector})(); return humanReadyPromise}
@@ -184,15 +105,16 @@ async function cropStyle(f,size=92){
   const ph=photos.find(p=>p.id===f.photo_id); if(!ph)return'';
   const url=await photoUrl(ph);
   const x=Number(f.x)||0, y=Number(f.y)||0, w=Math.max(1,Number(f.w)||1), h=Math.max(1,Number(f.h)||1);
+
   // Face boxes are stored in the same pixel coordinate system used by the photo builder.
-  // Most uploaded images are displayed at roughly 1200px wide when boxes are drawn.
-  // Use that coordinate system to crop a face from the larger photo instead of showing
-  // the whole photograph in every avatar.
+  // Most photos are drawn at about 1200px wide when boxes are created. This crops the
+  // avatar to the stored face box instead of showing the whole image.
   const baseW=1200;
-  const zoom=(size*1.85)/Math.max(w,h);
+  const zoom=(size*1.9)/Math.max(w,h);
   const bgW=baseW*zoom;
   const bgX=-(x*zoom)+(size-w*zoom)/2;
   const bgY=-(y*zoom)+(size-h*zoom)/2;
+
   return `background-image:url('${url}');background-size:${bgW}px auto;background-position:${bgX}px ${bgY}px;background-repeat:no-repeat;`;
 }
 async function photoHtml(p,size=92,cls='node-photo'){const f=faceForPerson(p.id); if(f)return `<div class="${cls}" style="${await cropStyle(f,size)}"></div>`; return `<div class="${cls}">${escapeHtml(initials(p))}</div>`}
@@ -201,42 +123,7 @@ async function hydrateAsyncPortraits(){for(const e of [...document.querySelector
 
 async function renderPeople(){const list=el('peopleList'); if(!list)return; let html=''; for(const p of visiblePeople()){html+=`<button class="people-card person-button" onclick="showPerson('${p.id}')">${await photoHtml(p)}<strong>${escapeHtml(fullName(p))}</strong><p>${p.birth_date||'No dates yet'}${p.death_date?' – '+p.death_date:''}</p></button>`} list.innerHTML=html||'<p>No people yet.</p>'}
 function showPerson(id){selectedPersonId=id;showPage('person');renderPersonProfile()}
-async function renderPersonProfile(){
-  const box=el('personProfile'); if(!box)return;
-  const p=person(selectedPersonId)||visiblePeople()[0];
-  if(!p){box.innerHTML='<p>No person selected.</p>';return}
-  selectedPersonId=p.id;
-  const tagged=faces.filter(f=>f.person_id===p.id);
-  const photoIds=[...new Set(tagged.map(f=>f.photo_id))];
-  const rels=relationships.filter(r=>r.from_person_id===p.id||r.to_person_id===p.id);
-  const parentIds=parentsOf(p.id);
-  const childIds=childrenOf(p.id);
-  const partnerIds=partnersOf(p.id);
-  const siblingIds=[...new Set(relationships.filter(r=>r.relationship_type==='sibling'&&(r.from_person_id===p.id||r.to_person_id===p.id)).map(r=>r.from_person_id===p.id?r.to_person_id:r.from_person_id))];
-  const cardList=async(ids)=>{
-    let html='';
-    for(const id of ids.filter(Boolean)){const pp=person(id); if(!pp)continue; html+=`<button class="mini-person" onclick="showPerson('${pp.id}')">${await photoHtml(pp,42)}<span><b>${escapeHtml(fullName(pp))}</b><small>${escapeHtml(pp.birth_date||'')}</small></span></button>`}
-    return html||'<p class="small">Not recorded yet.</p>';
-  };
-  let photosHtml='';
-  for(const pid of photoIds.slice(0,12)){const ph=photos.find(x=>x.id===pid); if(!ph)continue; photosHtml+=`<button class="mini-photo" onclick="selectPhotoById('${ph.id}');showPage('photo')"><img src="${await photoUrl(ph)}" alt=""><span>${escapeHtml(photoTitle(ph))}</span></button>`}
-  box.innerHTML=`
-    <div class="person-hero card">
-      ${await photoHtml(p,96)}
-      <div><h2>${escapeHtml(fullName(p))}</h2><p>${escapeHtml(p.birth_date||'')}${p.death_date?' – '+escapeHtml(p.death_date):''}</p><p class="small">${tagged.length} tagged face${tagged.length===1?'':'s'} · ${rels.length} direct relationship${rels.length===1?'':'s'}</p></div>
-      <div class="person-actions"><button class="primary" onclick="focusTreeOnPerson('${p.id}')">Focus in tree</button><button onclick="linkMyProfileToPerson('${p.id}')">Link my login to this person</button></div>
-    </div>
-    <div class="person-profile-grid">
-      <section class="card"><h2>Family</h2>
-        <div class="profile-relation-block"><h3>Parents</h3><div class="mini-person-list">${await cardList(parentIds)}</div></div>
-        <div class="profile-relation-block"><h3>Partner</h3><div class="mini-person-list">${await cardList(partnerIds)}</div></div>
-        <div class="profile-relation-block"><h3>Children</h3><div class="mini-person-list">${await cardList(childIds)}</div></div>
-        <div class="profile-relation-block"><h3>Siblings</h3><div class="mini-person-list">${await cardList(siblingIds)}</div></div>
-      </section>
-      <section class="card"><h2>Photos</h2><div class="mini-photo-grid">${photosHtml||'<p class="small">No tagged photos yet.</p>'}</div></section>
-      <section class="card wide-profile"><h2>Direct relationship records</h2><div class="relationship-list">${rels.map(r=>`<div class="rel-row"><strong>${escapeHtml(relationshipSentence(r))}</strong></div>`).join('')||'<p class="small">No direct relationships yet.</p>'}</div></section>
-    </div>`;
-}
+async function renderPersonProfile(){const box=el('personProfile'); if(!box)return; const p=person(selectedPersonId)||visiblePeople()[0]; if(!p){box.innerHTML='<p>No person selected.</p>';return} selectedPersonId=p.id; const rels=relationships.filter(r=>r.from_person_id===p.id||r.to_person_id===p.id); const tagged=faces.filter(f=>f.person_id===p.id); const photoIds=[...new Set(tagged.map(f=>f.photo_id))]; let photosHtml=''; for(const pid of photoIds.slice(0,12)){const ph=photos.find(x=>x.id===pid); if(!ph)continue; photosHtml+=`<button class="mini-photo" onclick="selectPhotoById('${ph.id}');showPage('photo')"><img src="${await photoUrl(ph)}" alt=""><span>${escapeHtml(photoTitle(ph))}</span></button>`} box.innerHTML=`<div class="person-hero card">${await photoHtml(p,96)}<div><h2>${escapeHtml(fullName(p))}</h2><p>${escapeHtml(p.birth_date||'')}${p.death_date?' – '+escapeHtml(p.death_date):''}</p><p class="small">${tagged.length} tagged face${tagged.length===1?'':'s'} · ${rels.length} direct relationship${rels.length===1?'':'s'}</p></div><div class="person-actions"><button class="primary" onclick="focusTreeOnPerson('${p.id}')">Focus in tree</button><button onclick="linkMyProfileToPerson('${p.id}')">Link my login to this person</button></div></div><div class="person-profile-grid"><section class="card"><h2>Photos</h2><div class="mini-photo-grid">${photosHtml||'<p class="small">No tagged photos yet.</p>'}</div></section><section class="card"><h2>Direct relationships</h2><div class="relationship-list">${rels.map(r=>`<div class="rel-row"><strong>${escapeHtml(relationshipSentence(r))}</strong></div>`).join('')||'<p class="small">No direct relationships yet.</p>'}</div></section></div>`}
 async function linkMyProfileToPerson(id){const p=person(id); if(!p)return; try{const r=await sb.from('profiles').update({person_id:id}).eq('user_id',session.user.id).select().single(); if(!r.error)currentProfile=Object.assign(currentProfile||{},r.data)}catch(e){} localStorage.setItem('familyGraph:profilePersonId',id); alert(`This login is now linked to ${fullName(p)}.`); updateDashboard();renderPersonProfile()}
 function focusTreeOnPerson(id){treeFocusId=id;treeMode='focus';showPage('graph')}
 async function addUnknownPerson(){const name=titleCaseName(prompt('Full name')||''); if(!name)return; const parts=name.split(' '); const ins=await sb.from('people').insert({display_name:name,given_names:parts[0]||name,family_name:parts.slice(1).join(' ')||null,created_by:session.user.id}).select().single(); if(ins.error){alert(ins.error.message);return} people.push(ins.data); updateDashboard(); await renderPeople(); updateSide()}
@@ -300,5 +187,5 @@ function zoomGraph(delta){const wrap=el('graphWrap'); if(!wrap)return; const old
 function resetGraphZoom(){graphScale=1;applyGraphZoom()}
 function fitGraph(){const wrap=el('graphWrap'); if(!wrap)return; graphScale=.78;applyGraphZoom();wrap.scrollLeft=60;wrap.scrollTop=40}
 
-Object.assign(window,{selectFaceForEditing,sendLogin,signOut,showPage,refreshData,setEditMode,uploadPhoto,selectPhotoById,selectLatestPhoto,previousPhoto,nextPhoto,detectFacesOnPhoto,addFaceBox,deleteSelectedFace,attachFaceToExisting,unlinkSelectedFace,saveFaceName,suggestSelectedFaceName,suggestFaceForPhoto,toggleFaceBoxes,toggleFaceNames,saveCurrentPhotoDetails,addPhotoComment,setRel,saveRelationship,deleteRelationship,renderRelationshipAssistant,queueRelationshipAssistantRender,saveAssistantRelationships,newFeedbackPrompt,setSuggestionStatus,setFeedbackStatus,addUnknownPerson,deletePerson,showPerson,linkMyProfileToPerson,focusTreeOnPerson,showDbTab,renderDatabase,selectDbPerson,selectDbPhoto,savePersonRecord,savePhotoRecord,showDeathDateField,renderGraph,fitGraph,zoomGraph,resetGraphZoom,setGraphFocus,setTreeMode,applyTheme,titleCaseName});
+Object.assign(window,{sendLogin,signOut,showPage,refreshData,setEditMode,uploadPhoto,selectPhotoById,selectLatestPhoto,previousPhoto,nextPhoto,detectFacesOnPhoto,addFaceBox,deleteSelectedFace,attachFaceToExisting,saveFaceName,suggestSelectedFaceName,suggestFaceForPhoto,toggleFaceBoxes,toggleFaceNames,saveCurrentPhotoDetails,addPhotoComment,setRel,saveRelationship,deleteRelationship,renderRelationshipAssistant,queueRelationshipAssistantRender,saveAssistantRelationships,newFeedbackPrompt,setSuggestionStatus,setFeedbackStatus,addUnknownPerson,deletePerson,showPerson,linkMyProfileToPerson,focusTreeOnPerson,showDbTab,renderDatabase,selectDbPerson,selectDbPhoto,savePersonRecord,savePhotoRecord,showDeathDateField,renderGraph,fitGraph,zoomGraph,resetGraphZoom,setGraphFocus,setTreeMode,applyTheme,titleCaseName});
 boot();
