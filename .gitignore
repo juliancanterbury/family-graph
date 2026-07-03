@@ -1,0 +1,19 @@
+# Local/private config
+config.local.js
+.env
+.env.*
+
+# Old generated packages / prototypes
+family-graph-*/
+*.zip
+*.old
+*.treebak.*
+index.old.html
+app.old.js
+style.old.css
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

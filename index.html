@@ -165,9 +165,59 @@
         <div id="peopleList" class="people-list"></div>
       </section>
 
-      <section id="relationshipsPage" class="page people-page hidden">
-        <h2>Relationships</h2>
-        <div id="relationshipList" class="relationship-list"></div>
+      <section id="relationshipsPage" class="page relationships-page hidden">
+        <div class="relationships-shell">
+          <div class="relationships-head">
+            <div>
+              <h2>Relationship Assistant</h2>
+              <p class="small">Add one relationship and let the archive suggest the obvious related facts. Only ticked direct facts are saved; cousins, nieces and grandparents are derived later.</p>
+            </div>
+            <button class="primary" onclick="renderRelationshipAssistant()">Refresh assistant</button>
+          </div>
+
+          <div class="relationship-assistant-grid">
+            <section class="card relationship-assistant-card">
+              <h2>Add relationship</h2>
+              <div class="assistant-form">
+                <label>Person
+                  <select id="assistantSubject" onchange="renderRelationshipAssistant()"></select>
+                </label>
+                <label>Relationship
+                  <select id="assistantType" onchange="renderRelationshipAssistant()">
+                    <option value="partner">is partner / husband / wife of</option>
+                    <option value="parent">is parent of</option>
+                    <option value="child">is child of</option>
+                    <option value="sibling">is sibling of</option>
+                  </select>
+                </label>
+                <label>Other existing person
+                  <select id="assistantOther" onchange="renderRelationshipAssistant()"></select>
+                </label>
+                <label>Or create new person
+                  <input id="assistantNewPerson" placeholder="Type full name, e.g. Chris White" oninput="queueRelationshipAssistantRender()" onblur="this.value=titleCaseName(this.value); renderRelationshipAssistant();">
+                </label>
+              </div>
+
+              <div id="assistantPreview" class="assistant-preview small">Choose two people to begin.</div>
+              <div id="assistantChecklist" class="assistant-checklist"></div>
+              <button class="primary full" onclick="saveAssistantRelationships()">Save ticked relationships</button>
+            </section>
+
+            <section class="card relationship-explain-card">
+              <h2>How this works</h2>
+              <p>Save only direct facts such as parent, partner and sibling. The app can derive cousin, aunt, uncle, niece, nephew and grandparent relationships from those facts.</p>
+              <div id="derivedPreview" class="derived-preview small"></div>
+            </section>
+          </div>
+
+          <section class="card relationship-list-card">
+            <div class="relationship-list-head">
+              <h2>Direct relationship records</h2>
+              <input id="relationshipSearch" placeholder="Search relationships…" oninput="renderRelationshipList()">
+            </div>
+            <div id="relationshipList" class="relationship-list"></div>
+          </section>
+        </div>
       </section>
 
 

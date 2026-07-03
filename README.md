@@ -1,16 +1,16 @@
-# Family Graph face naming fix
+# Family Graph
 
-No SQL changes.
+Private family archive for people, photos, face boxes, relationships, review notes and tree views.
 
-Replace these three files in the repo root:
+## Current live files
 
-- index.html
-- app.js
-- style.css
+- `index.html` — application shell
+- `app.js` — current application logic
+- `style.css` — current visual styling
+- `config.js` — local Supabase config, kept separately
 
-Fixes:
+## Important
 
-- selected unnamed faces now show a clear quick-name/search field
-- existing people can be selected either by dropdown or by typing their name
-- typing a new name no longer blocks spaces between first and last names
-- names still auto-capitalise live while preserving spaces
+Keep your existing `config.js`. This package includes `config.example.js` only so private keys are not overwritten.
+
+Images should eventually live in Supabase Storage, not in GitHub, except for small static placeholders/assets.

@@ -123,7 +123,7 @@ function showPage(page){
   if(page!=="photo"){ selectedFaceId=null; renderFaceEditor?.(); }
   if(page==="photo"){renderCurrentPhoto();updateSide();renderPhotoList()}
   if(page==="people"){renderPeople()}
-  if(page==="relationships"){renderRelationshipList()}
+  if(page==="relationships"){renderRelationshipList();renderRelationshipAssistant()}
   if(page==="admin"){renderDatabase()}
   if(page==="review"){renderReview()}
   if(page==="graph"){renderGraph();setTimeout(fitGraph,0)}
@@ -409,7 +409,176 @@ function relationshipSentence(r){
   if(r.relationship_type==="sibling")return`${fullName(a)} is sibling of ${fullName(b)}`;
   return`${fullName(a)} → ${fullName(b)}`
 }
-function renderRelationshipList(){safeHTML("relationshipList",relationships.map(r=>`<div class="rel-row"><div><strong>${relationshipSentence(r)}</strong></div><button class="danger" onclick="deleteRelationship('${r.id}')">Delete</button></div>`).join("")||"<p>No relationships yet.</p>")}
+function relationshipExists(from,to,type){
+  if(!from||!to||!type)return false;
+  return relationships.some(r=>{
+    if(r.relationship_type!==type)return false;
+    if(type==='partner'||type==='sibling'){
+      return (r.from_person_id===from&&r.to_person_id===to)||(r.from_person_id===to&&r.to_person_id===from);
+    }
+    return r.from_person_id===from&&r.to_person_id===to;
+  });
+}
+function relationshipLabelFor(edge){
+  const a=person(edge.from), b=person(edge.to);
+  if(!a||!b)return 'Missing person';
+  if(edge.type==='parent')return `${fullName(a)} is ${edge.label||'parent'} of ${fullName(b)}`;
+  if(edge.type==='partner')return `${fullName(a)} is partner of ${fullName(b)}`;
+  if(edge.type==='sibling')return `${fullName(a)} is sibling of ${fullName(b)}`;
+  return `${fullName(a)} → ${fullName(b)}`;
+}
+function childrenOf(id){return relationships.filter(r=>r.relationship_type==='parent'&&r.from_person_id===id).map(r=>r.to_person_id).filter(pid=>isRealPerson(person(pid)))}
+function partnersOf(id){
+  return relationships.filter(r=>r.relationship_type==='partner'&&(r.from_person_id===id||r.to_person_id===id)).map(r=>r.from_person_id===id?r.to_person_id:r.from_person_id).filter(pid=>isRealPerson(person(pid)));
+}
+function parentsFor(id){return relationships.filter(r=>r.relationship_type==='parent'&&r.to_person_id===id).map(r=>r.from_person_id).filter(pid=>isRealPerson(person(pid)))}
+function siblingsOf(id){
+  const direct=relationships.filter(r=>r.relationship_type==='sibling'&&(r.from_person_id===id||r.to_person_id===id)).map(r=>r.from_person_id===id?r.to_person_id:r.from_person_id);
+  const ps=parentsFor(id);
+  const shared=ps.flatMap(p=>childrenOf(p)).filter(c=>c!==id);
+  return [...new Set([...direct,...shared])].filter(pid=>isRealPerson(person(pid)));
+}
+function assistantPersonOptions(selected){
+  return ['<option value="">Choose person…</option>'].concat(
+    visiblePeople().sort((a,b)=>fullName(a).localeCompare(fullName(b))).map(p=>`<option value="${p.id}" ${p.id===selected?'selected':''}>${escapeHtml(fullName(p))}</option>`)
+  ).join('');
+}
+let relationshipAssistantTimer=null;
+function queueRelationshipAssistantRender(){
+  clearTimeout(relationshipAssistantTimer);
+  relationshipAssistantTimer=setTimeout(renderRelationshipAssistant,120);
+}
+function getAssistantOtherName(){return titleCaseName(el('assistantNewPerson')?.value||'')}
+function getAssistantEdges(){
+  const subject=el('assistantSubject')?.value||'';
+  const existing=el('assistantOther')?.value||'';
+  const newName=getAssistantOtherName();
+  const other=existing || (newName?'__new__':'');
+  const type=el('assistantType')?.value||'partner';
+  const edges=[];
+  const notes=[];
+  if(!subject||!other)return {subject,other,type,newName,edges,notes};
+  const otherLabel=other==='__new__'?newName:fullName(person(other));
+  const add=(edge,checked=true,reason='')=>{
+    if(!edge.from||!edge.to||edge.from===edge.to)return;
+    if(edge.to==='__new__'||edge.from==='__new__'){
+      // allowed; resolved when saving
+    }else if(relationshipExists(edge.from,edge.to,edge.type)){
+      reason = reason ? reason+' · already exists' : 'Already exists';
+      checked=false;
+    }
+    edges.push({...edge,checked,reason});
+  };
+  if(type==='partner'){
+    add({from:subject,to:other,type:'partner',label:'partner'},true,'Main relationship');
+    const subjectChildren=childrenOf(subject);
+    if(subjectChildren.length){
+      subjectChildren.forEach(child=>add({from:other,to:child,type:'parent',label:'parent'},false,`Is ${otherLabel} also ${fullName(person(child))}'s parent?`));
+    }
+    if(other!=='__new__'){
+      childrenOf(other).forEach(child=>add({from:subject,to:child,type:'parent',label:'parent'},false,`Is ${fullName(person(subject))} also ${fullName(person(child))}'s parent?`));
+    }
+    notes.push('Partner does not automatically mean parent. Tick any shared children explicitly.');
+  }else if(type==='parent'){
+    add({from:subject,to:other,type:'parent',label:'parent'},true,'Main relationship');
+    partnersOf(subject).forEach(partnerId=>add({from:partnerId,to:other,type:'parent',label:'parent'},false,`Is ${fullName(person(partnerId))} also ${otherLabel}'s parent?`));
+    notes.push('Grandparents, cousins, nieces and nephews will be derived from the saved parent facts.');
+  }else if(type==='child'){
+    add({from:other,to:subject,type:'parent',label:'parent'},true,'Main relationship');
+    if(other!=='__new__')partnersOf(other).forEach(partnerId=>add({from:partnerId,to:subject,type:'parent',label:'parent'},false,`Is ${fullName(person(partnerId))} also ${fullName(person(subject))}'s parent?`));
+  }else if(type==='sibling'){
+    add({from:subject,to:other,type:'sibling',label:'sibling'},true,'Main relationship');
+    const subjectParents=parentsFor(subject);
+    subjectParents.forEach(parentId=>add({from:parentId,to:other,type:'parent',label:'parent'},false,`Is ${fullName(person(parentId))} also ${otherLabel}'s parent?`));
+    if(other!=='__new__'){
+      parentsFor(other).forEach(parentId=>add({from:parentId,to:subject,type:'parent',label:'parent'},false,`Is ${fullName(person(parentId))} also ${fullName(person(subject))}'s parent?`));
+    }
+    notes.push('Siblings are useful, but the tree is strongest when the shared parents are also entered.');
+  }
+  // remove duplicate proposed edges, preserving first
+  const seen=new Set();
+  const unique=[];
+  for(const e of edges){
+    const a=e.type==='partner'||e.type==='sibling'?[e.from,e.to].sort().join('|'):[e.from,e.to].join('|');
+    const key=`${e.type}|${a}`;
+    if(seen.has(key))continue;seen.add(key);unique.push(e);
+  }
+  return {subject,other,type,newName,edges:unique,notes};
+}
+function renderRelationshipAssistant(){
+  const subjectEl=el('assistantSubject'), otherEl=el('assistantOther');
+  if(!subjectEl||!otherEl)return;
+  const keepSubject=subjectEl.value || visiblePeople()[0]?.id || '';
+  const keepOther=otherEl.value || '';
+  subjectEl.innerHTML=assistantPersonOptions(keepSubject);
+  otherEl.innerHTML=assistantPersonOptions(keepOther);
+  const {subject,other,newName,edges,notes}=getAssistantEdges();
+  const preview=el('assistantPreview'), checklist=el('assistantChecklist'), derived=el('derivedPreview');
+  if(!subject||!other){
+    if(preview)preview.innerHTML='Choose a person and another existing/new person.';
+    if(checklist)checklist.innerHTML='';
+    if(derived)derived.innerHTML='Example: add Barbara White as Maria White’s parent; the app can later derive that Maria is Jean’s niece and Julian’s cousin.';
+    return;
+  }
+  const otherLabel=other==='__new__'?newName:fullName(person(other));
+  if(preview)preview.innerHTML=`You are adding facts around <strong>${escapeHtml(fullName(person(subject)))}</strong> and <strong>${escapeHtml(otherLabel)}</strong>.`;
+  if(checklist){
+    checklist.innerHTML=edges.map((e,i)=>{
+      const disabled=e.reason&&e.reason.includes('Already exists')?'disabled':'';
+      const checked=e.checked&&!disabled?'checked':'';
+      const label=relationshipLabelFor(e).replaceAll('__new__', otherLabel);
+      return `<label class="assistant-check"><input type="checkbox" data-edge-index="${i}" ${checked} ${disabled}><span><b>${escapeHtml(label)}</b>${e.reason?`<small>${escapeHtml(e.reason)}</small>`:''}</span></label>`;
+    }).join('') || '<p class="small">No new direct facts suggested.</p>';
+  }
+  if(derived){
+    const derivedLines=[];
+    if(edges.some(e=>e.type==='parent')) derivedLines.push('Cousins, nieces/nephews and grandparents should be derived from parent links — not manually stored.');
+    if(edges.some(e=>e.type==='partner')) derivedLines.push('Partner links keep couples together in the tree but never turn someone into a child of their partner’s parents.');
+    if(notes.length)derivedLines.push(...notes);
+    derived.innerHTML=derivedLines.map(x=>`<div class="derived-note">${escapeHtml(x)}</div>`).join('')||'No derived notes yet.';
+  }
+}
+async function findOrCreateAssistantPerson(){
+  const existing=el('assistantOther')?.value||'';
+  const newName=getAssistantOtherName();
+  if(existing)return existing;
+  if(!newName)return '';
+  let p=people.find(p=>fullName(p).toLowerCase()===newName.toLowerCase());
+  if(p)return p.id;
+  const parts=newName.split(' ');
+  const ins=await sb.from('people').insert({display_name:newName,given_names:parts[0]||newName,family_name:parts.slice(1).join(' ')||null,created_by:session.user.id}).select().single();
+  if(ins.error){alert(ins.error.message);return ''}
+  people.push(ins.data);
+  return ins.data.id;
+}
+async function saveAssistantRelationships(){
+  const data=getAssistantEdges();
+  if(!data.subject||!data.other)return alert('Choose two people first.');
+  const resolvedOther=await findOrCreateAssistantPerson();
+  if(!resolvedOther)return alert('Choose or create the other person.');
+  const checked=[...document.querySelectorAll('#assistantChecklist input[type="checkbox"]:checked')].map(cb=>Number(cb.dataset.edgeIndex));
+  if(!checked.length)return alert('Tick at least one direct relationship to save.');
+  const rows=[];
+  for(const i of checked){
+    const e=data.edges[i]; if(!e)continue;
+    const from=e.from==='__new__'?resolvedOther:e.from;
+    const to=e.to==='__new__'?resolvedOther:e.to;
+    if(!from||!to||from===to)continue;
+    if(relationshipExists(from,to,e.type))continue;
+    rows.push({from_person_id:from,to_person_id:to,relationship_type:e.type,label:e.label||e.type,source_photo_id:currentPhoto?currentPhoto.id:null,created_by:session.user.id});
+  }
+  if(!rows.length){setStatus('No new relationships to save');renderRelationshipAssistant();return;}
+  const ins=await sb.from('relationships').insert(rows).select();
+  if(ins.error){alert(ins.error.message);return}
+  relationships.push(...(ins.data||[]));
+  updateDashboard();updateSide();renderRelationshipList();renderRelationshipAssistant();await renderPeople();setStatus(`Saved ${rows.length} relationship${rows.length===1?'':'s'}`);
+}
+function renderRelationshipList(){
+  const q=(el('relationshipSearch')?.value||'').toLowerCase();
+  const rows=relationships.filter(r=>!q||relationshipSentence(r).toLowerCase().includes(q));
+  safeHTML('relationshipList',rows.map(r=>`<div class="rel-row"><div><strong>${relationshipSentence(r)}</strong><br><span class="small">Direct fact · ${escapeHtml(r.relationship_type)}</span></div><button class="danger" onclick="deleteRelationship('${r.id}')">Delete</button></div>`).join('')||'<p>No relationships yet.</p>');
+}
+
 function updateSide(){
   safeText("faceCount",currentPhoto?faces.filter(f=>f.photo_id===currentPhoto.id).length:0);safeText("namedCount",currentPhoto?faces.filter(f=>f.photo_id===currentPhoto.id&&f.person_id).length:0);
   renderPhotoComments();
@@ -831,5 +1000,5 @@ function zoomGraph(delta){const wrap=el("graphWrap");if(!wrap)return;const old=g
 function resetGraphZoom(){graphScale=1;applyGraphZoom()}
 function fitGraph(){const wrap=el("graphWrap");if(!wrap)return;graphScale=.72;applyGraphZoom();wrap.scrollLeft=120;wrap.scrollTop=80}
 
-Object.assign(window,{setTreeMode,setGraphFocus,attachFaceToExisting,selectPhotoById,previousPhoto,nextPhoto,detectFacesOnPhoto,setEditMode,addPhotoComment,suggestSelectedFaceName,suggestFaceForPhoto,newFeedbackPrompt,setSuggestionStatus,setFeedbackStatus,showDeathDateField,sendLogin,signOut,showPage,refreshData,uploadPhoto,selectLatestPhoto,addFaceBox,deleteSelectedFace,saveFaceName,setRel,saveRelationship,deleteRelationship,renderGraph,fitGraph,zoomGraph,resetGraphZoom,addUnknownPerson,deletePerson,toggleFaceBoxes,toggleFaceNames,applyTheme,titleCaseName,showDbTab,renderDatabase,selectDbPerson,selectDbPhoto,savePersonRecord,savePhotoRecord});
+Object.assign(window,{renderRelationshipAssistant,queueRelationshipAssistantRender,saveAssistantRelationships,setTreeMode,setGraphFocus,attachFaceToExisting,selectPhotoById,previousPhoto,nextPhoto,detectFacesOnPhoto,setEditMode,addPhotoComment,suggestSelectedFaceName,suggestFaceForPhoto,newFeedbackPrompt,setSuggestionStatus,setFeedbackStatus,showDeathDateField,sendLogin,signOut,showPage,refreshData,uploadPhoto,selectLatestPhoto,addFaceBox,deleteSelectedFace,saveFaceName,setRel,saveRelationship,deleteRelationship,renderGraph,fitGraph,zoomGraph,resetGraphZoom,addUnknownPerson,deletePerson,toggleFaceBoxes,toggleFaceNames,applyTheme,titleCaseName,showDbTab,renderDatabase,selectDbPerson,selectDbPhoto,savePersonRecord,savePhotoRecord});
 boot();
