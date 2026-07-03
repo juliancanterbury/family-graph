@@ -75,24 +75,37 @@ async function saveCurrentPhotoDetails(){if(!currentPhoto)return; const patch={}
 function toggleFaceBoxes(){showFaceBoxes=!showFaceBoxes;renderCurrentPhoto();safeText('boxToggleText',showFaceBoxes?'Hide boxes':'Show boxes')}
 function toggleFaceNames(){showFaceNames=!showFaceNames;renderCurrentPhoto();safeText('nameToggleText',showFaceNames?'Hide names':'Show names')}
 
+
+function selectFaceForEditing(id, focusName=false){
+  selectedFaceId=id;
+  document.querySelectorAll('.face').forEach(node=>node.classList.toggle('selected', node.dataset.faceId===id));
+  renderFaceEditor();
+  if(focusName){
+    setTimeout(()=>{
+      const input=el('faceName');
+      if(input){ input.focus(); input.select(); }
+    },0);
+  }
+}
+
 function faceElement(f){
   const d=document.createElement('div');
   d.className='face'+(f.person_id?' named':'')+(f.id===selectedFaceId?' selected':'')+(!f.person_id?' unknown':'');
+  d.dataset.faceId=f.id;
   d.style.left=Number(f.x)+'px';d.style.top=Number(f.y)+'px';d.style.width=Number(f.w)+'px';d.style.height=Number(f.h)+'px';
   const label=f.label || (f.id===selectedFaceId?'Unnamed face':'');
   d.innerHTML=`<span>${escapeHtml(label)}</span><div class="handle"></div>`;
   d.addEventListener('pointerdown',ev=>startDrag(ev,f.id));
   d.querySelector('.handle').addEventListener('pointerdown',ev=>startResize(ev,f.id));
-  d.addEventListener('click',ev=>{ev.stopPropagation();selectedFaceId=f.id;renderCurrentPhoto();renderFaceEditor()});
+  d.addEventListener('click',ev=>{ev.stopPropagation();selectFaceForEditing(f.id,false)});
+  d.addEventListener('dblclick',ev=>{ev.stopPropagation();selectFaceForEditing(f.id,true)});
   return d
 }
 async function addFaceBox(){if(!currentPhoto)return alert('Upload a photo first.'); const ins=await sb.from('faces').insert({photo_id:currentPhoto.id,x:200,y:160,w:80,h:100,label:null,status:'manual',created_by:session.user.id}).select().single(); if(ins.error){alert(ins.error.message);return} faces.push(ins.data); selectedFaceId=ins.data.id; updateDashboard(); await renderCurrentPhoto();updateSide();setStatus('Face saved')}
 let dragState=null;
 function startDrag(ev,id){
   if(ev.target.classList.contains('handle'))return;
-  selectedFaceId=id;
-  renderCurrentPhoto();
-  renderFaceEditor();
+  selectFaceForEditing(id,false);
   if(!editMode)return;
   ev.preventDefault();ev.stopPropagation();
   const f=faces.find(x=>x.id===id); if(!f)return;
@@ -120,7 +133,7 @@ function renderFaceEditor(){
     <div class="form-grid compact-form">
       <label>Use existing person<select id="existingPersonSelect">${opts}</select></label>
       <button class="primary full" onclick="attachFaceToExisting()">Use selected person</button>
-      <label>Create new person<input id="faceName" value="${escapeHtml(typed)}" placeholder="Type a new full name" autocomplete="off" onblur="this.value=titleCaseName(this.value)"></label>
+      <label>Create new person<input id="faceName" value="${escapeHtml(typed)}" placeholder="Type a new full name" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();saveFaceName()}" onblur="this.value=titleCaseName(this.value)"></label>
       <button class="full" onclick="saveFaceName()">Create / save typed name</button>
       ${p?'<button class="full" onclick="unlinkSelectedFace()">Unlink this face</button>':''}
       <button class="full" onclick="suggestSelectedFaceName()">Suggest correction instead</button>
@@ -286,144 +299,6 @@ function applyGraphZoom(){const inner=el('graphInner'); if(inner)inner.style.tra
 function zoomGraph(delta){const wrap=el('graphWrap'); if(!wrap)return; const old=graphScale,cx=wrap.scrollLeft+wrap.clientWidth/2,cy=wrap.scrollTop+wrap.clientHeight/2; graphScale=Math.max(.25,Math.min(2.2,graphScale+delta));applyGraphZoom();wrap.scrollLeft=(cx/old)*graphScale-wrap.clientWidth/2;wrap.scrollTop=(cy/old)*graphScale-wrap.clientHeight/2}
 function resetGraphZoom(){graphScale=1;applyGraphZoom()}
 function fitGraph(){const wrap=el('graphWrap'); if(!wrap)return; graphScale=.78;applyGraphZoom();wrap.scrollLeft=60;wrap.scrollTop=40}
-
-
-
-/* === Emergency fix: robust selected-face naming ===
-   This intentionally overrides the earlier face selection/editor functions.
-   Click selects immediately; editing panel is always rebuilt; save works for unnamed faces.
-*/
-function selectFaceForEditing(id){
-  selectedFaceId=id;
-  setStatus('Face selected');
-  renderFaceEditor();
-  renderCurrentPhoto();
-}
-
-function faceElement(f){
-  const d=document.createElement('div');
-  d.className='face'+(f.person_id?' named':'')+(f.id===selectedFaceId?' selected':'')+(!f.person_id?' unknown':'');
-  d.style.left=Number(f.x)+'px';
-  d.style.top=Number(f.y)+'px';
-  d.style.width=Number(f.w)+'px';
-  d.style.height=Number(f.h)+'px';
-  const label=f.label || (f.person_id ? '' : 'Unnamed face');
-  d.innerHTML=`<span>${escapeHtml(label)}</span><div class="handle"></div>`;
-
-  d.addEventListener('click',ev=>{
-    ev.preventDefault();
-    ev.stopPropagation();
-    selectFaceForEditing(f.id);
-  });
-
-  d.addEventListener('dblclick',ev=>{
-    ev.preventDefault();
-    ev.stopPropagation();
-    selectFaceForEditing(f.id);
-    setEditMode(true);
-    setTimeout(()=>el('faceName')?.focus(),0);
-  });
-
-  d.addEventListener('pointerdown',ev=>startDrag(ev,f.id));
-  const h=d.querySelector('.handle');
-  if(h)h.addEventListener('pointerdown',ev=>startResize(ev,f.id));
-  return d;
-}
-
-function startDrag(ev,id){
-  if(ev.target.classList.contains('handle'))return;
-  selectedFaceId=id;
-  renderFaceEditor();
-  if(!editMode)return;
-  ev.preventDefault();
-  ev.stopPropagation();
-  const f=faces.find(x=>x.id===id); if(!f)return;
-  dragState={mode:'drag',id,startX:ev.clientX,startY:ev.clientY,x:Number(f.x),y:Number(f.y)};
-  try{ev.currentTarget.setPointerCapture(ev.pointerId)}catch(e){}
-  window.addEventListener('pointermove',onPointerMove);
-  window.addEventListener('pointerup',endPointer);
-}
-
-function renderFaceEditor(){
-  const w=el('faceEditor'); if(!w)return;
-  const f=faces.find(x=>x.id===selectedFaceId);
-  if(!f){
-    w.innerHTML='<p>Select or add a face box.</p><button class="full" onclick="suggestFaceForPhoto()">Suggest a face/name</button>';
-    return;
-  }
-  const p=f.person_id?person(f.person_id):null;
-  const current=p?fullName(p):(f.label||'Unnamed face');
-
-  if(!canEdit()){
-    w.innerHTML=`<p><strong>${escapeHtml(current)}</strong></p><textarea id="faceSuggestionText" placeholder="Suggest a correction…"></textarea><button class="primary full" onclick="suggestSelectedFaceName()">Send suggestion</button>`;
-    return;
-  }
-
-  const opts=['<option value="">Choose existing person…</option>'].concat(
-    visiblePeople().map(pp=>`<option value="${pp.id}" ${pp.id===f.person_id?'selected':''}>${escapeHtml(fullName(pp))}</option>`)
-  ).join('');
-  const typed=p?'':(f.label||'');
-  w.innerHTML=`
-    <div class="selected-face-summary">
-      <p class="small">Current</p>
-      <strong>${escapeHtml(current)}</strong>
-    </div>
-    <div class="form-grid compact-form">
-      <label>Use existing person
-        <select id="existingPersonSelect">${opts}</select>
-      </label>
-      <button class="primary full" onclick="attachFaceToExisting()">Use selected person</button>
-      <label>Name / create person
-        <input id="faceName" value="${escapeHtml(typed)}" placeholder="Type full name" autocomplete="off">
-      </label>
-      <button class="full" onclick="saveFaceName()">Save typed name</button>
-      ${p?'<button class="full" onclick="unlinkSelectedFace()">Unlink this face</button>':''}
-      <button class="full" onclick="suggestSelectedFaceName()">Suggest correction instead</button>
-    </div>`;
-
-  const input=el('faceName');
-  if(input){
-    input.addEventListener('keydown',ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); saveFaceName(); }});
-    input.addEventListener('blur',()=>{ input.value=titleCaseName(input.value); });
-  }
-}
-
-async function saveFaceName(){
-  const f=faces.find(x=>x.id===selectedFaceId);
-  const input=el('faceName');
-  const raw=(input?.value||'').replace(/\s+/g,' ').trim();
-  const name=titleCaseName(raw);
-  if(!f){ alert('Select a face first.'); return; }
-  if(!name){ alert('Type a name first, or choose an existing person.'); input?.focus(); return; }
-  if(['unknown','unknown person','unnamed','unnamed person','unnamed face'].includes(name.toLowerCase())){
-    alert('Please enter the real name, or leave this face unnamed until known.');
-    input?.focus();
-    return;
-  }
-  let p=people.find(pp=>fullName(pp).toLowerCase()===name.toLowerCase());
-  if(!p){
-    const parts=name.split(' ');
-    const ins=await sb.from('people').insert({
-      display_name:name,
-      given_names:parts[0]||name,
-      family_name:parts.slice(1).join(' ')||null,
-      created_by:session.user.id
-    }).select().single();
-    if(ins.error){alert(ins.error.message);return;}
-    p=ins.data;
-    people.push(p);
-  }
-  const upd=await sb.from('faces').update({person_id:p.id,label:fullName(p),status:'confirmed'}).eq('id',f.id).select().single();
-  if(upd.error){alert(upd.error.message);return;}
-  Object.assign(f,upd.data);
-  setStatus('Face named');
-  await renderCurrentPhoto();
-  renderFaceEditor();
-  updateSide();
-  await renderPeople();
-  await renderPhotoSidebar();
-  updateDashboard();
-}
 
 Object.assign(window,{selectFaceForEditing,sendLogin,signOut,showPage,refreshData,setEditMode,uploadPhoto,selectPhotoById,selectLatestPhoto,previousPhoto,nextPhoto,detectFacesOnPhoto,addFaceBox,deleteSelectedFace,attachFaceToExisting,unlinkSelectedFace,saveFaceName,suggestSelectedFaceName,suggestFaceForPhoto,toggleFaceBoxes,toggleFaceNames,saveCurrentPhotoDetails,addPhotoComment,setRel,saveRelationship,deleteRelationship,renderRelationshipAssistant,queueRelationshipAssistantRender,saveAssistantRelationships,newFeedbackPrompt,setSuggestionStatus,setFeedbackStatus,addUnknownPerson,deletePerson,showPerson,linkMyProfileToPerson,focusTreeOnPerson,showDbTab,renderDatabase,selectDbPerson,selectDbPhoto,savePersonRecord,savePhotoRecord,showDeathDateField,renderGraph,fitGraph,zoomGraph,resetGraphZoom,setGraphFocus,setTreeMode,applyTheme,titleCaseName});
 boot();
