@@ -83,7 +83,32 @@ function startResize(ev,id){if(!editMode)return; ev.preventDefault();ev.stopProp
 function onPointerMove(ev){if(!dragState)return; const f=faces.find(x=>x.id===dragState.id); if(!f)return; if(dragState.mode==='drag'){f.x=Math.max(0,dragState.x+ev.clientX-dragState.startX);f.y=Math.max(0,dragState.y+ev.clientY-dragState.startY)}else{f.w=Math.max(30,dragState.w+ev.clientX-dragState.startX);f.h=Math.max(30,dragState.h+ev.clientY-dragState.startY)} const box=document.querySelector('.face.selected'); if(box){box.style.left=f.x+'px';box.style.top=f.y+'px';box.style.width=f.w+'px';box.style.height=f.h+'px'}}
 async function endPointer(){if(dragState){const f=faces.find(x=>x.id===dragState.id); if(f)await sb.from('faces').update({x:f.x,y:f.y,w:f.w,h:f.h}).eq('id',f.id)} dragState=null;window.removeEventListener('pointermove',onPointerMove);window.removeEventListener('pointerup',endPointer)}
 async function deleteSelectedFace(){if(!canDelete())return alert('Only the archive owner can delete face boxes.'); if(!selectedFaceId)return; const del=await sb.from('faces').delete().eq('id',selectedFaceId); if(del.error){alert(del.error.message);return} faces=faces.filter(f=>f.id!==selectedFaceId); selectedFaceId=null; updateDashboard(); await renderCurrentPhoto();updateSide()}
-function renderFaceEditor(){const w=el('faceEditor'); if(!w)return; const f=faces.find(x=>x.id===selectedFaceId); if(!f){w.innerHTML='<p>Select or add a face box.</p><button class="full" onclick="suggestFaceForPhoto()">Suggest a face/name</button>';return} const p=f.person_id?person(f.person_id):null; if(!canEdit()){w.innerHTML=`<p><strong>${escapeHtml(p?fullName(p):(f.label||'Unnamed'))}</strong></p><textarea id="faceSuggestionText" placeholder="Suggest a correction…"></textarea><button class="primary full" onclick="suggestSelectedFaceName()">Send suggestion</button>`;return} const opts=['<option value="">Choose existing person…</option>'].concat(visiblePeople().map(pp=>`<option value="${pp.id}" ${pp.id===f.person_id?'selected':''}>${escapeHtml(fullName(pp))}</option>`)).join(''); w.innerHTML=`<div class="selected-face-summary"><p class="small">Selected face</p><strong>${escapeHtml(p?fullName(p):(f.label||'Unnamed face'))}</strong></div><div class="form-grid compact-form"><label>Choose existing person<select id="existingPersonSelect">${opts}</select></label><button class="primary full" onclick="attachFaceToExisting()">Attach to selected person</button><div class="or-divider">or</div><label>Name this face<input id="faceName" value="${escapeHtml(p?fullName(p):(f.label||''))}" placeholder="Type full name" onblur="this.value=titleCaseName(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();saveFaceName()}"></label><button class="full" onclick="saveFaceName()">Save name</button><button class="full" onclick="suggestSelectedFaceName()">Suggest correction instead</button></div>`}
+function renderFaceEditor(){
+  const w=el('faceEditor'); if(!w)return;
+  const f=faces.find(x=>x.id===selectedFaceId);
+  if(!f){
+    w.innerHTML='<p>Select or add a face box.</p><button class="full" onclick="suggestFaceForPhoto()">Suggest a face/name</button>';
+    return;
+  }
+  const p=f.person_id?person(f.person_id):null;
+  const current=p?fullName(p):(f.label||'Unnamed face');
+  if(!canEdit()){
+    w.innerHTML=`<p><strong>${escapeHtml(current)}</strong></p><textarea id="faceSuggestionText" placeholder="Suggest a correction…"></textarea><button class="primary full" onclick="suggestSelectedFaceName()">Send suggestion</button>`;
+    return;
+  }
+  const opts=['<option value="">Choose existing person…</option>'].concat(visiblePeople().map(pp=>`<option value="${pp.id}" ${pp.id===f.person_id?'selected':''}>${escapeHtml(fullName(pp))}</option>`)).join('');
+  const typed=p?'':(f.label||'');
+  w.innerHTML=`
+    <div class="selected-face-summary"><p class="small">Selected face</p><strong>${escapeHtml(current)}</strong></div>
+    <div class="form-grid compact-form">
+      <label>Choose existing person<select id="existingPersonSelect">${opts}</select></label>
+      <button class="primary full" onclick="attachFaceToExisting()">Attach to selected person</button>
+      <div class="small" style="text-align:center;margin:2px 0 0">or</div>
+      <label>Name this face<input id="faceName" value="${escapeHtml(typed)}" placeholder="Type full name" autocomplete="off" onkeydown="if(event.key==='Enter')saveFaceName()" onblur="this.value=titleCaseName(this.value)"></label>
+      <button class="full" onclick="saveFaceName()">Save name</button>
+      <button class="full" onclick="suggestSelectedFaceName()">Suggest correction instead</button>
+    </div>`;
+}
 async function attachFaceToExisting(){const f=faces.find(x=>x.id===selectedFaceId),pid=el('existingPersonSelect')?.value; if(!f||!pid)return alert('Choose an existing person first.'); const p=person(pid); const upd=await sb.from('faces').update({person_id:p.id,label:fullName(p),status:'confirmed'}).eq('id',f.id).select().single(); if(upd.error){alert(upd.error.message);return} Object.assign(f,upd.data); await renderCurrentPhoto();updateSide();await renderPeople();await renderPhotoSidebar();updateDashboard();setStatus('Face linked')}
 async function saveFaceName(){const f=faces.find(x=>x.id===selectedFaceId); const name=titleCaseName(el('faceName')?.value||''); if(!f||!name)return; if(['unknown','unknown person','unnamed','unnamed person'].includes(name.toLowerCase()))return alert('Please enter a real name, or leave it blank until known.'); let p=people.find(p=>fullName(p).toLowerCase()===name.toLowerCase()); if(!p){const parts=name.split(' '); const ins=await sb.from('people').insert({display_name:name,given_names:parts[0]||name,family_name:parts.slice(1).join(' ')||null,created_by:session.user.id}).select().single(); if(ins.error){alert(ins.error.message);return} p=ins.data; people.push(p)} const upd=await sb.from('faces').update({person_id:p.id,label:fullName(p),status:'confirmed'}).eq('id',f.id).select().single(); if(upd.error){alert(upd.error.message);return} Object.assign(f,upd.data); await renderCurrentPhoto();updateSide();await renderPeople();await renderPhotoSidebar();updateDashboard()}
 function waitForImage(img){return new Promise((res,rej)=>{if(!img)return rej(new Error('Photo element missing.')); if(img.complete&&img.naturalWidth)return res(img); img.onload=()=>res(img); img.onerror=()=>rej(new Error('Photo failed to load.'))})}
@@ -92,32 +117,39 @@ async function ensureHumanDetector(){if(humanReadyPromise)return humanReadyPromi
 function rectIoU(a,b){const ax2=a.x+a.w,ay2=a.y+a.h,bx2=b.x+b.w,by2=b.y+b.h; const ix=Math.max(0,Math.min(ax2,bx2)-Math.max(a.x,b.x)),iy=Math.max(0,Math.min(ay2,by2)-Math.max(a.y,b.y)); const inter=ix*iy; return inter/((a.w*a.h)+(b.w*b.h)-inter||1)}
 async function detectFacesOnPhoto(auto=false){try{if(!currentPhoto)return alert('Open or upload a photo first.'); const img=el('mainPhoto'); await waitForImage(img); const detector=await Promise.race([ensureHumanDetector(),timeoutPromise(20000)]); setStatus('Detecting faces…'); const result=await Promise.race([detector.detect(img),timeoutPromise(20000)]); const scale=(img.clientWidth||img.naturalWidth)/(img.naturalWidth||img.clientWidth||1); const found=(result.face||[]).map(face=>{const box=face.box||face.boxRaw||[]; return {x:Math.round((box[0]||0)*scale),y:Math.round((box[1]||0)*scale),w:Math.round((box[2]||0)*scale),h:Math.round((box[3]||0)*scale)}}).filter(r=>r.w>=24&&r.h>=24); if(!found.length){setStatus('No faces detected'); if(!auto)alert('No faces detected. Use Add face box.'); return} const existing=faces.filter(f=>f.photo_id===currentPhoto.id).map(f=>({x:+f.x||0,y:+f.y||0,w:+f.w||0,h:+f.h||0})); const fresh=[]; for(const r of found){if(existing.some(e=>rectIoU(e,r)>.35)||fresh.some(e=>rectIoU(e,r)>.35))continue; fresh.push(r)} if(!fresh.length){setStatus(`Detected ${found.length}; all already boxed`);return} const rows=fresh.map(r=>({photo_id:currentPhoto.id,x:r.x,y:r.y,w:r.w,h:r.h,label:null,status:'detected',created_by:session.user.id})); const ins=await sb.from('faces').insert(rows).select(); if(ins.error){alert(ins.error.message);setStatus('Face save failed');return} faces.push(...(ins.data||[])); await renderCurrentPhoto();updateSide();updateDashboard();setStatus(`Detected ${fresh.length} new face${fresh.length===1?'':'s'}`)}catch(e){console.error(e);setStatus('Face detection unavailable'); if(!auto)alert(e.message)}}
 
-function faceForPerson(id){return faces.find(f=>f.person_id===id)}
+function faceForPerson(id){
+  const rows=faces.filter(f=>f.person_id===id);
+  if(!rows.length)return null;
+  return rows.slice().sort((a,b)=>{
+    const score=f=>(f.status==='confirmed'?1000000:0)+(Number(f.w)||0)*(Number(f.h)||0);
+    return score(b)-score(a);
+  })[0];
+}
+function coordinateBaseWidthForPhoto(photoId){
+  const img=el('mainPhoto');
+  if(currentPhoto?.id===photoId && img?.clientWidth)return img.clientWidth;
+  const fs=faces.filter(f=>f.photo_id===photoId);
+  const maxRight=Math.max(0,...fs.map(f=>(Number(f.x)||0)+(Number(f.w)||0)));
+  // Face boxes are drawn against the displayed photo, normally about 1200px wide.
+  return Math.max(1200,Math.ceil(maxRight*1.15));
+}
 async function cropStyle(f,size=92){
   if(!f)return'';
-  const ph=photos.find(p=>p.id===f.photo_id); 
+  const ph=photos.find(p=>p.id===f.photo_id);
   if(!ph)return'';
   const url=await photoUrl(ph);
-
-  const x=Number(f.x)||0;
-  const y=Number(f.y)||0;
-  const w=Math.max(1,Number(f.w)||1);
-  const h=Math.max(1,Number(f.h)||1);
-
-  const img=el('mainPhoto');
-  const liveWidth=(img && img.complete && img.clientWidth) ? img.clientWidth : 0;
-  const coordWidth=liveWidth>300 ? liveWidth : 1200;
-
-  const zoom=(size*1.85)/Math.max(w,h);
-  const bgW=coordWidth*zoom;
-  const bgX=-(x*zoom)+(size-w*zoom)/2;
-  const bgY=-(y*zoom)+(size-h*zoom)/2;
-
-  return `background-image:url('${url}');background-size:${bgW}px auto;background-position:${bgX}px ${bgY}px;background-repeat:no-repeat;`;
+  const x=Number(f.x)||0, y=Number(f.y)||0, w=Math.max(1,Number(f.w)||1), h=Math.max(1,Number(f.h)||1);
+  const baseW=coordinateBaseWidthForPhoto(f.photo_id);
+  const cx=x+w/2, cy=y+h/2;
+  const zoom=size/(Math.max(w,h)*1.18);
+  const bgW=baseW*zoom;
+  const bgX=size/2-cx*zoom;
+  const bgY=size/2-cy*zoom;
+  return `background-image:url('${url}') !important;background-size:${bgW}px auto !important;background-position:${bgX}px ${bgY}px !important;background-repeat:no-repeat !important;`;
 }
 async function photoHtml(p,size=92,cls='node-photo'){const f=faceForPerson(p.id); if(f)return `<div class="${cls}" style="${await cropStyle(f,size)}"></div>`; return `<div class="${cls}">${escapeHtml(initials(p))}</div>`}
 function photoHtmlSync(p,cls='node-photo'){const f=faceForPerson(p.id); return f?`<div class="${cls} async-photo" data-person-id="${p.id}">${escapeHtml(initials(p))}</div>`:`<div class="${cls}">${escapeHtml(initials(p))}</div>`}
-async function hydrateAsyncPortraits(){for(const e of [...document.querySelectorAll('.async-photo[data-person-id]')]){const p=person(e.dataset.personId),f=p?faceForPerson(p.id):null;if(!f)continue;e.setAttribute('style',await cropStyle(f));e.textContent=''}}
+async function hydrateAsyncPortraits(){for(const e of [...document.querySelectorAll('.async-photo[data-person-id]')]){const p=person(e.dataset.personId),f=p?faceForPerson(p.id):null;if(!f)continue;e.setAttribute('style',await cropStyle(f,parseInt(e.offsetWidth||92,10)));e.textContent=''}}
 
 async function renderPeople(){const list=el('peopleList'); if(!list)return; let html=''; for(const p of visiblePeople()){html+=`<button class="people-card person-button" onclick="showPerson('${p.id}')">${await photoHtml(p)}<strong>${escapeHtml(fullName(p))}</strong><p>${p.birth_date||'No dates yet'}${p.death_date?' – '+p.death_date:''}</p></button>`} list.innerHTML=html||'<p>No people yet.</p>'}
 function showPerson(id){selectedPersonId=id;showPage('person');renderPersonProfile()}
