@@ -67,7 +67,7 @@ async function selectLatestPhoto(){currentPhoto=photos[0]||null;selectedFaceId=n
 async function previousPhoto(){if(!photos.length)return;let i=photoIndex();if(i<0)i=0;await selectPhotoById(photos[Math.max(0,i-1)].id)}
 async function nextPhoto(){if(!photos.length)return;let i=photoIndex();if(i<0)i=0;await selectPhotoById(photos[Math.min(photos.length-1,i+1)].id)}
 async function uploadPhoto(ev){const file=ev.target.files?.[0]; if(!file)return; setStatus('Uploading photo…'); const id=uid(),ext=(file.name.split('.').pop()||'jpg').toLowerCase(),path=`photos/${id}/original.${ext}`; const up=await sb.storage.from(MEDIA_BUCKET()).upload(path,file,{upsert:false}); if(up.error){alert(up.error.message);setStatus('Upload failed');return} const ins=await sb.from('photos').insert({id,title:file.name,storage_path:path,original_filename:file.name,mime_type:file.type,uploaded_by:session.user.id}).select().single(); if(ins.error){alert(ins.error.message);return} photos.unshift(ins.data); currentPhoto=ins.data; selectedFaceId=null; updateDashboard(); await renderCurrentPhoto();updateSide();await renderPhotoSidebar();setStatus('Photo saved — detecting faces…'); setTimeout(()=>detectFacesOnPhoto(true),350)}
-async function renderCurrentPhoto(){const img=el('mainPhoto'),empty=el('emptyPhoto'),c=el('photoCanvas'); if(img)img.src=currentPhoto?await photoUrl(currentPhoto):''; if(empty)empty.style.display=currentPhoto?'none':'grid'; if(!c)return; c.querySelectorAll('.face').forEach(e=>e.remove()); if(!currentPhoto)return; faces.filter(f=>f.photo_id===currentPhoto.id).forEach(f=>c.appendChild(faceElement(f))); c.classList.toggle('hide-boxes',!showFaceBoxes); c.classList.toggle('hide-names',!showFaceNames); const ph=currentPhoto; if(el('photoDate'))el('photoDate').value=ph.date_taken||ph.photo_date||ph.taken_at||''; if(el('photoPlace'))el('photoPlace').value=ph.location||ph.place||''}
+async function renderCurrentPhoto(){const img=el('mainPhoto'),empty=el('emptyPhoto'),c=el('photoCanvas'); if(img)img.src=currentPhoto?await photoUrl(currentPhoto):''; if(empty)empty.style.display=currentPhoto?'none':'grid'; if(currentPhoto&&img){try{await waitForImage(img); rememberPhotoCoordinateBase(currentPhoto.id,img)}catch(e){}} if(!c)return; c.querySelectorAll('.face').forEach(e=>e.remove()); if(!currentPhoto)return; faces.filter(f=>f.photo_id===currentPhoto.id).forEach(f=>c.appendChild(faceElement(f))); c.classList.toggle('hide-boxes',!showFaceBoxes); c.classList.toggle('hide-names',!showFaceNames); const ph=currentPhoto; if(el('photoDate'))el('photoDate').value=ph.date_taken||ph.photo_date||ph.taken_at||''; if(el('photoPlace'))el('photoPlace').value=ph.location||ph.place||''}
 async function renderPhotoSidebar(query=''){query=String(query||'').toLowerCase(); await renderPhotoPeopleNav(query); await renderPhotoList(query)}
 async function renderPhotoPeopleNav(query=''){const box=el('photoPeopleNav'); if(!box)return; let rows=visiblePeople().filter(p=>!query||fullName(p).toLowerCase().includes(query)).slice(0,12); let html=''; for(const p of rows){html+=`<button class="photo-person-link" onclick="showPerson('${p.id}')">${await photoHtml(p,34,'tiny-avatar')}<div><b>${escapeHtml(fullName(p))}</b><br><span class="small">${escapeHtml(p.birth_date||'')}</span></div><span class="blue-dot"></span></button>`} box.innerHTML=html||'<p class="small">No people found.</p>'}
 async function renderPhotoList(query=''){const box=el('photoList'); if(!box)return; let rows=photos.filter(ph=>!query||photoTitle(ph).toLowerCase().includes(query)); let html=''; for(const ph of rows){const url=await photoUrl(ph); const fc=faces.filter(f=>f.photo_id===ph.id).length,nc=faces.filter(f=>f.photo_id===ph.id&&f.person_id).length; const date=ph.date_taken||ph.photo_date||ph.taken_at||ph.created_at?.slice(0,10)||''; html+=`<button class="photo-list-item ${currentPhoto?.id===ph.id?'active':''}" onclick="selectPhotoById('${ph.id}')"><img src="${url}" alt=""><span><b>${escapeHtml(photoTitle(ph))}</b><small>${escapeHtml(date)} · ${fc} face${fc===1?'':'s'}${nc?` · ${nc} named`:''}</small></span></button>`} box.innerHTML=html||'<p class="small">No photos found.</p>'}
@@ -147,6 +147,8 @@ async function setSelectedFaceAsProfilePhoto(){
   const f=faces.find(x=>x.id===selectedFaceId);
   if(!f||!f.person_id)return alert('First attach this face to a person.');
   const p=person(f.person_id);
+  const img=el('mainPhoto');
+  if(img&&currentPhoto?.id===f.photo_id)rememberPhotoCoordinateBase(f.photo_id,img);
   setStoredProfileFaceId(f.person_id,f.id);
   if(p)p.profile_face_id=f.id;
   try{
@@ -159,13 +161,28 @@ async function setSelectedFaceAsProfilePhoto(){
   if(selectedPersonId===f.person_id)renderPersonProfile();
   setStatus('Profile photo set');
 }
-function coordinateBaseWidthForPhoto(photoId){
+function photoCoordStorageKey(photoId){return `familyGraph:photoCoordBase:${photoId}`}
+function rememberPhotoCoordinateBase(photoId,img){
+  if(!photoId||!img)return;
+  const w=Math.round(img.clientWidth||0),h=Math.round(img.clientHeight||0),nw=Math.round(img.naturalWidth||0),nh=Math.round(img.naturalHeight||0);
+  if(w>0&&h>0){
+    localStorage.setItem(photoCoordStorageKey(photoId),JSON.stringify({w,h,nw,nh,saved_at:new Date().toISOString()}));
+  }
+}
+function coordinateBaseForPhoto(photoId){
   const img=el('mainPhoto');
-  if(currentPhoto?.id===photoId && img?.clientWidth)return img.clientWidth;
+  if(currentPhoto?.id===photoId&&img?.clientWidth&&img?.clientHeight){
+    rememberPhotoCoordinateBase(photoId,img);
+    return {w:img.clientWidth,h:img.clientHeight};
+  }
+  try{
+    const saved=JSON.parse(localStorage.getItem(photoCoordStorageKey(photoId))||'null');
+    if(saved?.w>0&&saved?.h>0)return {w:saved.w,h:saved.h};
+  }catch(e){}
   const fs=faces.filter(f=>f.photo_id===photoId);
   const maxRight=Math.max(0,...fs.map(f=>(Number(f.x)||0)+(Number(f.w)||0)));
-  // Face boxes are drawn against the displayed photo, normally about 1200px wide.
-  return Math.max(1200,Math.ceil(maxRight*1.15));
+  const maxBottom=Math.max(0,...fs.map(f=>(Number(f.y)||0)+(Number(f.h)||0)));
+  return {w:Math.max(1200,Math.ceil(maxRight*1.18)),h:Math.max(800,Math.ceil(maxBottom*1.18))};
 }
 async function cropStyle(f,size=92){
   if(!f)return'';
@@ -173,13 +190,12 @@ async function cropStyle(f,size=92){
   if(!ph)return'';
   const url=await photoUrl(ph);
   const x=Number(f.x)||0, y=Number(f.y)||0, w=Math.max(1,Number(f.w)||1), h=Math.max(1,Number(f.h)||1);
-  const baseW=coordinateBaseWidthForPhoto(f.photo_id);
+  const base=coordinateBaseForPhoto(f.photo_id);
   const cx=x+w/2, cy=y+h/2;
   const zoom=size/(Math.max(w,h)*1.18);
-  const bgW=baseW*zoom;
-  const bgX=size/2-cx*zoom;
-  const bgY=size/2-cy*zoom;
-  return `background-image:url('${url}') !important;background-size:${bgW}px auto !important;background-position:${bgX}px ${bgY}px !important;background-repeat:no-repeat !important;`;
+  const bgW=base.w*zoom, bgH=base.h*zoom;
+  const bgX=size/2-cx*zoom, bgY=size/2-cy*zoom;
+  return `background-image:url('${url}') !important;background-size:${bgW}px ${bgH}px !important;background-position:${bgX}px ${bgY}px !important;background-repeat:no-repeat !important;`;
 }
 async function photoHtml(p,size=92,cls='node-photo'){const f=faceForPerson(p.id); if(f)return `<div class="${cls}" style="${await cropStyle(f,size)}"></div>`; return `<div class="${cls}">${escapeHtml(initials(p))}</div>`}
 function photoHtmlSync(p,cls='node-photo'){const f=faceForPerson(p.id); return f?`<div class="${cls} async-photo" data-person-id="${p.id}">${escapeHtml(initials(p))}</div>`:`<div class="${cls}">${escapeHtml(initials(p))}</div>`}
