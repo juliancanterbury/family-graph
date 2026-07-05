@@ -103,6 +103,7 @@ function renderFaceEditor(){
     <div class="form-grid compact-form">
       <label>Choose existing person<select id="existingPersonSelect">${opts}</select></label>
       <button class="primary full" onclick="attachFaceToExisting()">Attach to selected person</button>
+      ${p?'<button class="full" onclick="setSelectedFaceAsProfilePhoto()">Use as profile photo</button>':''}
       <div class="small" style="text-align:center;margin:2px 0 0">or</div>
       <label>Name this face<input id="faceName" value="${escapeHtml(typed)}" placeholder="Type full name" autocomplete="off" onkeydown="if(event.key==='Enter')saveFaceName()" onblur="this.value=titleCaseName(this.value)"></label>
       <button class="full" onclick="saveFaceName()">Save name</button>
@@ -117,13 +118,46 @@ async function ensureHumanDetector(){if(humanReadyPromise)return humanReadyPromi
 function rectIoU(a,b){const ax2=a.x+a.w,ay2=a.y+a.h,bx2=b.x+b.w,by2=b.y+b.h; const ix=Math.max(0,Math.min(ax2,bx2)-Math.max(a.x,b.x)),iy=Math.max(0,Math.min(ay2,by2)-Math.max(a.y,b.y)); const inter=ix*iy; return inter/((a.w*a.h)+(b.w*b.h)-inter||1)}
 async function detectFacesOnPhoto(auto=false){try{if(!currentPhoto)return alert('Open or upload a photo first.'); const img=el('mainPhoto'); await waitForImage(img); const detector=await Promise.race([ensureHumanDetector(),timeoutPromise(20000)]); setStatus('Detecting faces…'); const result=await Promise.race([detector.detect(img),timeoutPromise(20000)]); const scale=(img.clientWidth||img.naturalWidth)/(img.naturalWidth||img.clientWidth||1); const found=(result.face||[]).map(face=>{const box=face.box||face.boxRaw||[]; return {x:Math.round((box[0]||0)*scale),y:Math.round((box[1]||0)*scale),w:Math.round((box[2]||0)*scale),h:Math.round((box[3]||0)*scale)}}).filter(r=>r.w>=24&&r.h>=24); if(!found.length){setStatus('No faces detected'); if(!auto)alert('No faces detected. Use Add face box.'); return} const existing=faces.filter(f=>f.photo_id===currentPhoto.id).map(f=>({x:+f.x||0,y:+f.y||0,w:+f.w||0,h:+f.h||0})); const fresh=[]; for(const r of found){if(existing.some(e=>rectIoU(e,r)>.35)||fresh.some(e=>rectIoU(e,r)>.35))continue; fresh.push(r)} if(!fresh.length){setStatus(`Detected ${found.length}; all already boxed`);return} const rows=fresh.map(r=>({photo_id:currentPhoto.id,x:r.x,y:r.y,w:r.w,h:r.h,label:null,status:'detected',created_by:session.user.id})); const ins=await sb.from('faces').insert(rows).select(); if(ins.error){alert(ins.error.message);setStatus('Face save failed');return} faces.push(...(ins.data||[])); await renderCurrentPhoto();updateSide();updateDashboard();setStatus(`Detected ${fresh.length} new face${fresh.length===1?'':'s'}`)}catch(e){console.error(e);setStatus('Face detection unavailable'); if(!auto)alert(e.message)}}
 
-function faceForPerson(id){
+function profileFaceStorageKey(personId){return `familyGraph:profileFace:${personId}`}
+function storedProfileFaceId(personId){return localStorage.getItem(profileFaceStorageKey(personId))||null}
+function setStoredProfileFaceId(personId,faceId){if(personId&&faceId)localStorage.setItem(profileFaceStorageKey(personId),faceId)}
+function faceCreatedTime(f){return f?.created_at?new Date(f.created_at).getTime():0}
+function bestDefaultFaceForPerson(id){
   const rows=faces.filter(f=>f.person_id===id);
   if(!rows.length)return null;
   return rows.slice().sort((a,b)=>{
-    const score=f=>(f.status==='confirmed'?1000000:0)+(Number(f.w)||0)*(Number(f.h)||0);
-    return score(b)-score(a);
+    const confirmedA=a.status==='confirmed'?0:1;
+    const confirmedB=b.status==='confirmed'?0:1;
+    if(confirmedA!==confirmedB)return confirmedA-confirmedB;
+    const ta=faceCreatedTime(a),tb=faceCreatedTime(b);
+    if(ta!==tb)return ta-tb;
+    return String(a.id||'').localeCompare(String(b.id||''));
   })[0];
+}
+function faceForPerson(id){
+  const p=person(id);
+  const explicitId=p?.profile_face_id || storedProfileFaceId(id);
+  if(explicitId){
+    const explicit=faces.find(f=>f.id===explicitId&&f.person_id===id);
+    if(explicit)return explicit;
+  }
+  return bestDefaultFaceForPerson(id);
+}
+async function setSelectedFaceAsProfilePhoto(){
+  const f=faces.find(x=>x.id===selectedFaceId);
+  if(!f||!f.person_id)return alert('First attach this face to a person.');
+  const p=person(f.person_id);
+  setStoredProfileFaceId(f.person_id,f.id);
+  if(p)p.profile_face_id=f.id;
+  try{
+    const res=await sb.from('people').update({profile_face_id:f.id}).eq('id',f.person_id).select().single();
+    if(!res.error&&res.data)Object.assign(p,res.data);
+  }catch(e){}
+  await renderPeople();
+  renderFaceEditor();
+  renderGraph();
+  if(selectedPersonId===f.person_id)renderPersonProfile();
+  setStatus('Profile photo set');
 }
 function coordinateBaseWidthForPhoto(photoId){
   const img=el('mainPhoto');
@@ -217,5 +251,5 @@ function zoomGraph(delta){const wrap=el('graphWrap'); if(!wrap)return; const old
 function resetGraphZoom(){graphScale=1;applyGraphZoom()}
 function fitGraph(){const wrap=el('graphWrap'); if(!wrap)return; graphScale=.78;applyGraphZoom();wrap.scrollLeft=60;wrap.scrollTop=40}
 
-Object.assign(window,{sendLogin,signOut,showPage,refreshData,setEditMode,uploadPhoto,selectPhotoById,selectLatestPhoto,previousPhoto,nextPhoto,detectFacesOnPhoto,addFaceBox,deleteSelectedFace,attachFaceToExisting,saveFaceName,suggestSelectedFaceName,suggestFaceForPhoto,toggleFaceBoxes,toggleFaceNames,saveCurrentPhotoDetails,addPhotoComment,setRel,saveRelationship,deleteRelationship,renderRelationshipAssistant,queueRelationshipAssistantRender,saveAssistantRelationships,newFeedbackPrompt,setSuggestionStatus,setFeedbackStatus,addUnknownPerson,deletePerson,showPerson,linkMyProfileToPerson,focusTreeOnPerson,showDbTab,renderDatabase,selectDbPerson,selectDbPhoto,savePersonRecord,savePhotoRecord,showDeathDateField,renderGraph,fitGraph,zoomGraph,resetGraphZoom,setGraphFocus,setTreeMode,applyTheme,titleCaseName});
+Object.assign(window,{sendLogin,signOut,showPage,refreshData,setEditMode,uploadPhoto,selectPhotoById,selectLatestPhoto,previousPhoto,nextPhoto,detectFacesOnPhoto,addFaceBox,deleteSelectedFace,attachFaceToExisting,saveFaceName,suggestSelectedFaceName,suggestFaceForPhoto,toggleFaceBoxes,toggleFaceNames,saveCurrentPhotoDetails,addPhotoComment,setRel,saveRelationship,deleteRelationship,renderRelationshipAssistant,queueRelationshipAssistantRender,saveAssistantRelationships,newFeedbackPrompt,setSuggestionStatus,setFeedbackStatus,addUnknownPerson,deletePerson,showPerson,linkMyProfileToPerson,focusTreeOnPerson,showDbTab,renderDatabase,selectDbPerson,selectDbPhoto,savePersonRecord,savePhotoRecord,showDeathDateField,renderGraph,fitGraph,zoomGraph,resetGraphZoom,setGraphFocus,setTreeMode,setSelectedFaceAsProfilePhoto,applyTheme,titleCaseName});
 boot();
