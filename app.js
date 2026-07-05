@@ -294,181 +294,87 @@ function showDeathDateField(){const wrap=el('deathFieldWrap'); if(wrap)wrap.oute
 async function savePersonRecord(id){const p=person(id); if(!p)return; const name=titleCaseName(el('editDisplayName')?.value||fullName(p)); const patch={display_name:name,given_names:titleCaseName(el('editGiven')?.value||name.split(' ')[0]),family_name:titleCaseName(el('editFamily')?.value||name.split(' ').slice(1).join(' '))||null,birth_date:el('editBirth')?.value||null}; if(el('editDeath'))patch.death_date=el('editDeath').value||null; const res=await sb.from('people').update(patch).eq('id',id).select().single(); if(res.error){alert(res.error.message);return} Object.assign(p,res.data); faces.filter(f=>f.person_id===id).forEach(f=>f.label=fullName(p)); await sb.from('faces').update({label:fullName(p)}).eq('person_id',id); setStatus('Person saved'); await refreshData()}
 async function savePhotoRecord(id){const ph=photos.find(x=>x.id===id); if(!ph)return; const patch={title:el('editPhotoTitle')?.value||null}; const dv=el('editPhotoDate')?.value||null,lv=el('editPhotoLocation')?.value||null,cv=el('editPhotoCaption')?.value||null; ['date_taken','photo_date','taken_at'].forEach(k=>{if(k in ph)patch[k]=dv}); ['location','place'].forEach(k=>{if(k in ph)patch[k]=lv}); ['caption','description'].forEach(k=>{if(k in ph)patch[k]=cv}); const res=await sb.from('photos').update(patch).eq('id',id).select().single(); if(res.error){alert(res.error.message);return} Object.assign(ph,res.data);setStatus('Photo saved');renderDatabase();renderPhotoSidebar()}
 
-function partnerPairs(){
-  const out=[],seen=new Set();
-  relationships.filter(r=>r.relationship_type==='partner').forEach(r=>{
-    const a=person(r.from_person_id),b=person(r.to_person_id);
-    if(!isRealPerson(a)||!isRealPerson(b))return;
-    const key=[a.id,b.id].sort().join('|');
-    if(seen.has(key))return;
-    seen.add(key);
-    out.push([a.id,b.id]);
-  });
-  return out;
-}
-
-function parentFacts(){
-  return relationships.filter(r=>r.relationship_type==='parent'&&isRealPerson(person(r.from_person_id))&&isRealPerson(person(r.to_person_id)));
-}
-function generationDepth(id,seen=new Set()){
-  if(seen.has(id))return 0;
-  seen.add(id);
-  const ps=parentFacts().filter(r=>r.to_person_id===id).map(r=>r.from_person_id);
-  if(!ps.length)return 0;
-  return 1+Math.max(...ps.map(p=>generationDepth(p,new Set(seen))));
-}
-function parentGroups(){
-  const groups={};
-  parentFacts().forEach(r=>{
-    const child=r.to_person_id;
-    const ps=parentFacts().filter(x=>x.to_person_id===child).map(x=>x.from_person_id).filter((v,i,a)=>a.indexOf(v)===i).sort((a,b)=>fullName(person(a)).localeCompare(fullName(person(b))));
-    const key=ps.join('|')||r.from_person_id;
-    if(!groups[key])groups[key]={parents:ps.length?ps:[r.from_person_id],children:[]};
-    if(!groups[key].children.includes(child))groups[key].children.push(child);
-  });
-  Object.values(groups).forEach(g=>g.children.sort((a,b)=>fullName(person(a)).localeCompare(fullName(person(b)))));
-  return Object.values(groups);
-}
-function populateTreeFocus(){
-  const sel=el('treeFocusSelect'); if(!sel)return;
-  const old=treeFocusId||sel.value;
-  sel.innerHTML='<option value="">Whole archive</option>'+visiblePeople().map(p=>`<option value="${p.id}">${escapeHtml(fullName(p))}</option>`).join('');
-  sel.value=old||'';
-  document.querySelectorAll('.tree-mode-btn').forEach(b=>b.classList.toggle('primary',b.dataset.mode===treeMode));
-  applyTheme(currentTheme);
-}
+function partnerPairs(){const out=[],seen=new Set(); relationships.filter(r=>r.relationship_type==='partner').forEach(r=>{const a=person(r.from_person_id),b=person(r.to_person_id); if(!isRealPerson(a)||!isRealPerson(b))return; const key=[a.id,b.id].sort().join('|'); if(seen.has(key))return; seen.add(key); out.push([a.id,b.id])}); return out}
+function generationDepth(id,seen=new Set()){if(seen.has(id))return 0; seen.add(id); const ps=parentsOf(id).filter(pid=>isRealPerson(person(pid))); if(!ps.length)return 0; return 1+Math.max(...ps.map(p=>generationDepth(p,seen)))}
+function parentGroups(){const groups={}; relationships.filter(r=>r.relationship_type==='parent'&&isRealPerson(person(r.from_person_id))&&isRealPerson(person(r.to_person_id))).forEach(r=>{const child=r.to_person_id; const ps=parentsOf(child).filter(pid=>isRealPerson(person(pid))).sort(); const key=ps.join('|')||r.from_person_id; if(!groups[key])groups[key]={parents:ps.length?ps:[r.from_person_id],children:[]}; if(!groups[key].children.includes(child))groups[key].children.push(child)}); return Object.values(groups)}
+function populateTreeFocus(){const sel=el('treeFocusSelect'); if(!sel)return; const old=treeFocusId||sel.value; sel.innerHTML='<option value="">Whole archive</option>'+visiblePeople().map(p=>`<option value="${p.id}">${escapeHtml(fullName(p))}</option>`).join(''); sel.value=old||''; document.querySelectorAll('.tree-mode-btn').forEach(b=>b.classList.toggle('primary',b.dataset.mode===treeMode)); applyTheme(currentTheme)}
 function setGraphFocus(id){treeFocusId=id; renderGraph()}
 function setTreeMode(mode){treeMode=mode; populateTreeFocus(); renderGraph()}
-function peopleForTree(){
-  let ids=new Set(visiblePeople().map(p=>p.id));
-  if(treeMode==='ancestors'&&treeFocusId){
-    ids=new Set([treeFocusId]);
-    const walk=id=>parentFacts().filter(r=>r.to_person_id===id).forEach(r=>{ids.add(r.from_person_id);walk(r.from_person_id)});
-    walk(treeFocusId);
-    partnersOf(treeFocusId).forEach(p=>ids.add(p));
-  } else if(treeMode==='descendants'&&treeFocusId){
-    ids=new Set([treeFocusId]);
-    const walk=id=>parentFacts().filter(r=>r.from_person_id===id).forEach(r=>{ids.add(r.to_person_id);walk(r.to_person_id)});
-    walk(treeFocusId);
-    partnersOf(treeFocusId).forEach(p=>ids.add(p));
-  } else if(treeMode==='focus'&&treeFocusId){
-    ids=new Set([treeFocusId]);
-    parentsOf(treeFocusId).forEach(p=>ids.add(p));
-    childrenOf(treeFocusId).forEach(c=>ids.add(c));
-    partnersOf(treeFocusId).forEach(p=>ids.add(p));
-    parentsOf(treeFocusId).forEach(p=>childrenOf(p).forEach(s=>ids.add(s)));
-    childrenOf(treeFocusId).forEach(c=>childrenOf(c).forEach(g=>ids.add(g)));
-  } else if(treeMode==='photo'&&currentPhoto){
-    ids=new Set(faces.filter(f=>f.photo_id===currentPhoto.id&&f.person_id).map(f=>f.person_id));
+function peopleForTree(){let ids=new Set(visiblePeople().map(p=>p.id)); if(treeMode==='ancestors'&&treeFocusId){ids=new Set([treeFocusId]); const walk=id=>parentsOf(id).forEach(p=>{ids.add(p);walk(p)}); walk(treeFocusId)} else if(treeMode==='descendants'&&treeFocusId){ids=new Set([treeFocusId]); const walk=id=>childrenOf(id).forEach(c=>{ids.add(c);walk(c)}); walk(treeFocusId)} else if(treeMode==='focus'&&treeFocusId){ids=new Set([treeFocusId,...parentsOf(treeFocusId),...childrenOf(treeFocusId),...partnersOf(treeFocusId)]); parentsOf(treeFocusId).forEach(p=>parentsOf(p).forEach(g=>ids.add(g))); childrenOf(treeFocusId).forEach(c=>childrenOf(c).forEach(g=>ids.add(g)))} else if(treeMode==='photo'&&currentPhoto){ids=new Set(faces.filter(f=>f.photo_id===currentPhoto.id&&f.person_id).map(f=>f.person_id))} return ids}
+function parentPairsFromChildren(){
+  const pairs=[],seen=new Set();
+  parentGroups().forEach(g=>{
+    const ps=(g.parents||[]).filter(id=>isRealPerson(person(id))).sort((a,b)=>fullName(person(a)).localeCompare(fullName(person(b))));
+    if(ps.length<2)return;
+    const key=ps.slice(0,2).sort().join('|');
+    if(seen.has(key))return;
+    seen.add(key);
+    pairs.push([ps[0],ps[1]]);
+  });
+  return pairs;
+}
+function graphCouplePairs(){
+  const out=[],seen=new Set();
+  function add(a,b,forced=false){
+    if(!a||!b||!isRealPerson(person(a))||!isRealPerson(person(b)))return;
+    const key=[a,b].sort().join('|');
+    if(seen.has(key))return;
+    seen.add(key); out.push({a,b,forced});
   }
-  return ids;
+  parentPairsFromChildren().forEach(([a,b])=>add(a,b,true));
+  partnerPairs().forEach(([a,b])=>add(a,b,false));
+  return out;
 }
 function layoutPositions(){
-  const include=peopleForTree();
-  const real=visiblePeople().filter(p=>include.has(p.id));
-  const pos={},nodeW=178,unitGap=24,rowGap=230,startY=115;
-  const depth={};
-  real.forEach(p=>depth[p.id]=generationDepth(p.id));
-
-  // Partners can sit beside each other, but never move people up/down the tree
-  // except where neither person has parent facts and they would otherwise split rows.
-  for(let i=0;i<4;i++)partnerPairs().forEach(([a,b])=>{
-    if(!include.has(a)||!include.has(b))return;
-    const pa=parentsOf(a).length,pb=parentsOf(b).length;
-    if(!pa&&!pb){const d=Math.max(depth[a]||0,depth[b]||0);depth[a]=d;depth[b]=d;}
-  });
-
-  const partner=new Map();
-  partnerPairs().forEach(([a,b])=>{partner.set(a,b);partner.set(b,a)});
+  const include=peopleForTree(),real=visiblePeople().filter(p=>include.has(p.id)),pos={},nodeW=178,unitGap=28,rowGap=250,startY=120;
+  const pairs=graphCouplePairs().filter(p=>include.has(p.a)&&include.has(p.b));
+  const mate=new Map();
+  pairs.forEach(p=>{if(!mate.has(p.a))mate.set(p.a,p.b); if(!mate.has(p.b))mate.set(p.b,p.a)});
+  const depth={}; real.forEach(p=>depth[p.id]=generationDepth(p.id));
+  // Shared children define parent units. If one parent has known parents and the other does not,
+  // the other parent is lifted/dropped to the same generation rather than becoming a loose root.
+  for(let i=0;i<8;i++)pairs.forEach(({a,b})=>{if(!include.has(a)||!include.has(b))return; const d=Math.max(depth[a]||0,depth[b]||0); depth[a]=d; depth[b]=d});
   const unitsByRow={},used=new Set();
-  real.forEach(p=>{
-    if(used.has(p.id))return;
-    const q=partner.get(p.id);
-    let members=[p.id];
-    if(q&&!used.has(q)&&include.has(q)&&(depth[q]||0)===(depth[p.id]||0)){
-      members=[p.id,q].sort((a,b)=>fullName(person(a)).localeCompare(fullName(person(b))));
-      used.add(q);
-    }
-    used.add(p.id);
-    const d=depth[p.id]||0;
+  // First create couple/parent units so they cannot be separated later.
+  pairs.forEach(({a,b})=>{
+    if(!include.has(a)||!include.has(b)||used.has(a)||used.has(b))return;
+    const members=[a,b].sort((x,y)=>fullName(person(x)).localeCompare(fullName(person(y))));
+    members.forEach(id=>used.add(id));
+    const d=Math.max(depth[a]||0,depth[b]||0);
     (unitsByRow[d]||=[]).push({members,x:0,width:members.length*nodeW+(members.length-1)*unitGap});
   });
-
+  // Then add single people.
+  real.forEach(p=>{
+    if(used.has(p.id))return;
+    used.add(p.id);
+    const d=depth[p.id]||0;
+    (unitsByRow[d]||=[]).push({members:[p.id],x:0,width:nodeW});
+  });
+  Object.values(unitsByRow).forEach(units=>units.sort((u,v)=>fullName(person(u.members[0])).localeCompare(fullName(person(v.members[0])))));
+  Object.entries(unitsByRow).forEach(([d,units])=>{let x=160; units.forEach(u=>{u.x=x; x+=u.width+100})});
   const allUnits=()=>Object.values(unitsByRow).flat();
   const findUnit=id=>allUnits().find(u=>u.members.includes(id));
   const unitCenter=u=>u.x+u.width/2;
-
-  Object.values(unitsByRow).forEach(units=>units.sort((u,v)=>fullName(person(u.members[0])).localeCompare(fullName(person(v.members[0])))));
-  Object.entries(unitsByRow).forEach(([d,units])=>{let x=120; units.forEach(u=>{u.x=x; x+=u.width+82})});
-
-  // Centre children under their actual recorded parent group only.
+  const setUnitX=(u,x)=>u.x=x;
+  // Centre children below their actual parent group only. Sibling/partner links never affect generations.
   parentGroups().forEach(g=>{
-    const parentUnits=[...new Set(g.parents.filter(id=>include.has(id)).map(findUnit).filter(Boolean))];
-    const childUnits=[...new Set(g.children.filter(id=>include.has(id)).map(findUnit).filter(Boolean))];
+    const parentUnits=[...new Set((g.parents||[]).filter(id=>include.has(id)).map(findUnit).filter(Boolean))];
+    const childUnits=[...new Set((g.children||[]).filter(id=>include.has(id)).map(findUnit).filter(Boolean))];
     if(!parentUnits.length||!childUnits.length)return;
     const pc=parentUnits.reduce((s,u)=>s+unitCenter(u),0)/parentUnits.length;
-    const total=childUnits.reduce((s,u)=>s+u.width,0)+(childUnits.length-1)*82;
+    const total=childUnits.reduce((s,u)=>s+u.width,0)+(childUnits.length-1)*90;
     let x=pc-total/2;
-    childUnits.forEach(u=>{u.x=x;x+=u.width+82});
+    childUnits.sort((a,b)=>fullName(person(a.members[0])).localeCompare(fullName(person(b.members[0])))).forEach(u=>{setUnitX(u,x);x+=u.width+90});
   });
-
-  // Resolve overlaps row-by-row without changing generation.
   Object.entries(unitsByRow).forEach(([d,units])=>{
-    units.sort((a,b)=>a.x-b.x);
-    let min=80;
-    units.forEach(u=>{if(u.x<min)u.x=min;min=u.x+u.width+70});
+    units.sort((a,b)=>a.x-b.x); let min=80;
+    units.forEach(u=>{if(u.x<min)u.x=min;min=u.x+u.width+90});
     const y=startY+Number(d)*rowGap;
     units.forEach(u=>u.members.forEach((id,i)=>{pos[id]={x:u.x+i*(nodeW+unitGap),y,unit:u}}));
   });
   return pos;
 }
-async function renderGraph(){
-  const graph=el('graph'); if(!graph)return;
-  graph.innerHTML='<div class="graph-inner" id="graphInner"></div>';
-  const inner=el('graphInner'),pos=layoutPositions(),nodeW=178,nodeH=134,include=peopleForTree();
-
-  // Pair links are visual only: a double-ended arrow, never structure.
-  partnerPairs().forEach(([a,b])=>{
-    if(!include.has(a)||!include.has(b)||!pos[a]||!pos[b])return;
-    if(Math.abs(pos[a].y-pos[b].y)>8)return;
-    const left=pos[a].x<pos[b].x?a:b,right=left===a?b:a;
-    const y=pos[left].y+56;
-    drawH(inner,pos[left].x+nodeW,y,pos[right].x-(pos[left].x+nodeW),'partner-line');
-    label(inner,(pos[left].x+nodeW+pos[right].x)/2-12,y-18,'↔');
-  });
-
-  parentGroups().forEach(g=>{
-    const parents=g.parents.filter(id=>include.has(id)&&pos[id]),children=g.children.filter(id=>include.has(id)&&pos[id]);
-    if(!parents.length||!children.length)return;
-    const pc=parents.reduce((s,id)=>s+pos[id].x+nodeW/2,0)/parents.length;
-    const parentBottom=Math.max(...parents.map(id=>pos[id].y+nodeH));
-    const childTop=Math.min(...children.map(id=>pos[id].y));
-    const busY=(parentBottom+childTop)/2;
-    drawV(inner,pc,parentBottom,busY-parentBottom);
-    const left=Math.min(...children.map(id=>pos[id].x+nodeW/2)),right=Math.max(...children.map(id=>pos[id].x+nodeW/2));
-    drawH(inner,left,busY,right-left);
-    children.forEach(id=>drawV(inner,pos[id].x+nodeW/2,busY,pos[id].y-busY));
-  });
-
-  for(const p of visiblePeople().filter(p=>include.has(p.id))){
-    const xy=pos[p.id]||{x:100,y:100},n=document.createElement('button');
-    n.className='node tree-node'+(p.id===treeFocusId?' selected-node':'');
-    n.style.left=xy.x+'px';n.style.top=xy.y+'px';n.onclick=()=>showPerson(p.id);
-    n.innerHTML=`${await photoHtml(p,64)}<strong>${escapeHtml(fullName(p))}</strong><span class="small">${p.birth_date||''}${p.death_date?' – '+p.death_date:''}</span>`;
-    inner.appendChild(n);
-  }
-  renderTreeWarnings(include);
-  applyGraphZoom();
-}
-function renderTreeWarnings(include){
-  const graph=el('graph'); if(!graph)return;
-  const unplaced=visiblePeople().filter(p=>include.has(p.id)&&!parentsOf(p.id).length&&!childrenOf(p.id).length&&!partnersOf(p.id).length);
-  const siblingOnly=relationships.filter(r=>r.relationship_type==='sibling').filter(r=>include.has(r.from_person_id)||include.has(r.to_person_id)).length;
-  if(!unplaced.length&&!siblingOnly)return;
-  const note=document.createElement('div'); note.className='tree-note';
-  note.innerHTML=`<b>Tree notes</b><br>${siblingOnly?`Sibling records are ignored for layout. `:''}${unplaced.length?`${unplaced.length} people need parent/child facts before they can be placed confidently.`:''}`;
-  graph.appendChild(note);
-}
+async function renderGraph(){const graph=el('graph'); if(!graph)return; graph.innerHTML='<div class="graph-inner" id="graphInner"></div>'; const inner=el('graphInner'),pos=layoutPositions(),nodeW=178,nodeH=140,include=peopleForTree(); graphCouplePairs().forEach(({a,b})=>{if(!include.has(a)||!include.has(b)||!pos[a]||!pos[b])return; const left=pos[a].x<pos[b].x?a:b,right=left===a?b:a; const y=pos[left].y+62; drawH(inner,pos[left].x+nodeW,y,pos[right].x-(pos[left].x+nodeW)); label(inner,(pos[left].x+nodeW+pos[right].x)/2-14,y-24,'↔')}); parentGroups().forEach(g=>{const parents=g.parents.filter(id=>include.has(id)&&pos[id]),children=g.children.filter(id=>include.has(id)&&pos[id]); if(!parents.length||!children.length)return; const pc=parents.reduce((s,id)=>s+pos[id].x+nodeW/2,0)/parents.length; const parentBottom=Math.max(...parents.map(id=>pos[id].y+nodeH)); const childTop=Math.min(...children.map(id=>pos[id].y)); const busY=(parentBottom+childTop)/2; drawV(inner,pc,parentBottom,busY-parentBottom); const left=Math.min(...children.map(id=>pos[id].x+nodeW/2)),right=Math.max(...children.map(id=>pos[id].x+nodeW/2)); drawH(inner,left,busY,right-left); children.forEach(id=>drawV(inner,pos[id].x+nodeW/2,busY,pos[id].y-busY))}); for(const p of visiblePeople().filter(p=>include.has(p.id))){const xy=pos[p.id]||{x:100,y:100},n=document.createElement('button');n.className='node tree-node'+(p.id===treeFocusId?' selected-node':'');n.style.left=xy.x+'px';n.style.top=xy.y+'px';n.onclick=()=>showPerson(p.id);n.innerHTML=`${await photoHtml(p,64)}<strong>${escapeHtml(fullName(p))}</strong><span class="small">${p.birth_date||''}${p.death_date?' – '+p.death_date:''}</span>`; inner.appendChild(n)} applyGraphZoom()}
 function drawH(g,x,y,w){const e=document.createElement('div');e.className='line h';if(w<0){e.style.left=x+w+'px';e.style.width=-w+'px'}else{e.style.left=x+'px';e.style.width=w+'px'}e.style.top=y+'px';g.appendChild(e)}
 function drawV(g,x,y,h){const e=document.createElement('div');e.className='line v';e.style.left=x+'px';e.style.top=y+'px';e.style.height=Math.max(0,h)+'px';g.appendChild(e)}
 function label(g,x,y,text){const e=document.createElement('div');e.className='rel-label';e.style.left=x+'px';e.style.top=y+'px';e.textContent=text;g.appendChild(e)}
