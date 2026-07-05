@@ -183,7 +183,7 @@ function bestDefaultFaceForPerson(id){
 }
 function faceForPerson(id){
   const p=person(id);
-  const explicitId=p?.profile_face_id || storedProfileFaceId(id);
+  const explicitId=p?.preferred_face_id || p?.profile_face_id || storedProfileFaceId(id);
   if(explicitId){
     const explicit=faces.find(f=>f.id===explicitId&&f.person_id===id);
     if(explicit)return explicit;
@@ -196,9 +196,9 @@ async function setSelectedFaceAsProfilePhoto(){
   try{setStatus('Creating profile photo…'); await generateFaceThumbnail(f);}catch(e){console.error(e); alert(e.message||'Could not create profile photo.'); return;}
   const p=person(f.person_id);
   setStoredProfileFaceId(f.person_id,f.id);
-  if(p)p.profile_face_id=f.id;
+  if(p){p.preferred_face_id=f.id; p.profile_face_id=f.id;}
   try{
-    const res=await sb.from('people').update({profile_face_id:f.id}).eq('id',f.person_id).select().single();
+    const res=await sb.from('people').update({preferred_face_id:f.id,profile_face_id:f.id}).eq('id',f.person_id).select().single();
     if(!res.error&&res.data)Object.assign(p,res.data);
   }catch(e){}
   await renderPeople();
@@ -218,17 +218,18 @@ function coordinateBaseWidthForPhoto(photoId){
 function isExplicitProfileFace(f){
   if(!f||!f.person_id)return false;
   const p=person(f.person_id);
-  const explicitId=p?.profile_face_id || storedProfileFaceId(f.person_id);
+  const explicitId=p?.preferred_face_id || p?.profile_face_id || storedProfileFaceId(f.person_id);
   return !!explicitId && explicitId===f.id;
 }
 function hasGeneratedThumb(f){return !!faceThumbPath(f)}
 async function cropStyle(f,size=92){
   if(!f)return'';
-  // Use a real generated thumbnail whenever it exists. This is now the
-  // single reliable display path for sidebar, People, Tree and Profile.
-  // Faces without thumbnails still use the older working crop fallback.
-  const thumb=await faceThumbUrl(f);
-  if(thumb)return `background-image:url('${thumb}') !important;background-size:cover !important;background-position:center center !important;background-repeat:no-repeat !important;`;
+  // Use a generated thumbnail only when this exact face has been chosen
+  // as the person's profile photo. Otherwise keep the legacy crop fallback.
+  if(isExplicitProfileFace(f)){
+    const thumb=await faceThumbUrl(f);
+    if(thumb)return `background-image:url('${thumb}') !important;background-size:cover !important;background-position:center center !important;background-repeat:no-repeat !important;`;
+  }
   const ph=photos.find(p=>p.id===f.photo_id);
   if(!ph)return'';
   const url=await photoUrl(ph);
