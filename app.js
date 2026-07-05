@@ -57,7 +57,7 @@ function setEditMode(on){editMode=!!on; setModeClasses(); el('viewModeBtn')?.cla
 
 function applyTheme(name){currentTheme=name||'ocean'; document.body.dataset.theme=currentTheme; localStorage.setItem('familyGraphTheme',currentTheme); document.querySelectorAll('.theme-chip').forEach(b=>b.classList.toggle('active',b.dataset.theme===currentTheme))}
 function updateDashboard(){safeText('peopleTotal',people.length);safeText('photosTotal',photos.length);safeText('facesTotal',faces.length);safeText('relationshipsTotal',relationships.length); const hour=new Date().getHours(); const greeting=hour<12?'Good morning':hour<18?'Good afternoon':'Good evening'; safeText('dashboardGreeting',`${greeting}, ${currentProfile?.display_name?.split(' ')[0]||'Julian'}`); renderDashboardExtras()}
-async function renderDashboardExtras(){const photoBox=el('dashboardPhotos'),taskBox=el('dashboardTasks'),peopleBox=el('dashboardPeople'); if(photoBox){let html=''; for(const ph of photos.slice(0,6)){const url=await photoUrl(ph); const c=faces.filter(f=>f.photo_id===ph.id).length; html+=`<button class="mini-photo" onclick="selectPhotoById('${ph.id}');showPage('photo')"><img src="${url}" alt=""><span>${escapeHtml(photoTitle(ph))}<small>${c} face${c===1?'':'s'}</small></span></button>`} photoBox.innerHTML=html||'<p class="small">No photos yet.</p>'} if(taskBox){const unknown=faces.filter(f=>!f.person_id).length; const noDates=visiblePeople().filter(p=>!p.birth_date).length; const linked=!!profilePersonId(); const pending=suggestions.some(x=>x.type==='account_link_request'&&x.author_id===currentUserId()&&String(x.status||'open')==='open'); const peopleOpts=visiblePeople().map(p=>`<option value="${p.id}">${escapeHtml(fullName(p))}</option>`).join(''); taskBox.innerHTML=`<button onclick="showPage('photo')"><b>${unknown}</b><span>Unnamed faces to identify</span></button><button onclick="showPage('people')"><b>${noDates}</b><span>People without birth dates</span></button><button onclick="showPage('review')"><b>?</b><span>Comments, wishlist and bugs</span></button>${linked?`<button onclick="showPerson('${profilePersonId()}')"><b>✓</b><span>Your login is linked</span></button>`:`<div class="account-link-card"><b>${pending?'Pending':'Who are you?'}</b><span>${pending?'Your link request is waiting for approval.':'Select your existing person record so the archive knows who is signed in.'}</span><select id="accountLinkPerson" ${pending?'disabled':''}><option value="">Choose person…</option>${peopleOpts}</select><button class="primary" onclick="requestAccountLink()" ${pending?'disabled':''}>${pending?'Request sent':'Request link'}</button></div>`}` } if(peopleBox){let html=''; for(const p of visiblePeople().slice(0,8)){html+=`<button onclick="showPerson('${p.id}')">${await photoHtml(p,42)}<span>${escapeHtml(fullName(p))}<small>${escapeHtml(p.birth_date||'')}</small></span></button>`} peopleBox.innerHTML=html||'<p class="small">No people yet.</p>'}}
+async function renderDashboardExtras(){const photoBox=el('dashboardPhotos'),taskBox=el('dashboardTasks'),peopleBox=el('dashboardPeople'); if(photoBox){let html=''; for(const ph of photos.slice(0,6)){const url=await photoUrl(ph); const c=faces.filter(f=>f.photo_id===ph.id).length; html+=`<button class="mini-photo" onclick="selectPhotoById('${ph.id}');showPage('photo')"><img src="${url}" alt=""><span>${escapeHtml(photoTitle(ph))}<small>${c} face${c===1?'':'s'}</small></span></button>`} photoBox.innerHTML=html||'<p class="small">No photos yet.</p>'} if(taskBox){const unknown=faces.filter(f=>!f.person_id).length; const noDates=visiblePeople().filter(p=>!p.birth_date).length; const linked=!!profilePersonId(); taskBox.innerHTML=`<button onclick="showPage('photo')"><b>${unknown}</b><span>Unnamed faces to identify</span></button><button onclick="showPage('people')"><b>${noDates}</b><span>People without birth dates</span></button><button onclick="showPage('people')"><b>${linked?'✓':'!'}</b><span>${linked?'Your login is linked':'Link your login to a person'}</span></button>`} if(peopleBox){let html=''; for(const p of visiblePeople().slice(0,8)){html+=`<button onclick="showPerson('${p.id}')">${await photoHtml(p,42)}<span>${escapeHtml(fullName(p))}<small>${escapeHtml(p.birth_date||'')}</small></span></button>`} peopleBox.innerHTML=html||'<p class="small">No people yet.</p>'}}
 
 async function photoUrl(photo){if(!photo)return''; return sb.storage.from(MEDIA_BUCKET()).getPublicUrl(photo.storage_path).data.publicUrl}
 function photoTitle(ph){return ph?.title||ph?.original_filename||'Photo'}
@@ -274,17 +274,15 @@ function assistantTypeText(t){return {partner:'is partner of',parent:'is parent 
 function renderAssistantChecklist(items){const box=el('assistantChecklist'); if(!box)return; box.innerHTML=items.map((it,i)=>`<label class="assistant-check"><input type="checkbox" data-assistant-index="${i}" ${it.checked?'checked':''}> <span><b>${escapeHtml(it.fromName)}</b> is ${escapeHtml(it.label)} of <b>${escapeHtml(it.toName)}</b></span></label>`).join('')||'<p class="small">No suggestions yet.</p>'; window._assistantItems=items}
 async function saveAssistantRelationships(){let items=window._assistantItems||[]; if(!items.length)return alert('No relationships to save.'); let otherId=el('assistantOther')?.value; const newName=titleCaseName(el('assistantNewPerson')?.value||''); if(!otherId&&newName){let p=people.find(p=>fullName(p).toLowerCase()===newName.toLowerCase()); if(!p){const parts=newName.split(' '); const ins=await sb.from('people').insert({display_name:newName,given_names:parts[0]||newName,family_name:parts.slice(1).join(' ')||null,created_by:session.user.id}).select().single(); if(ins.error){alert(ins.error.message);return} p=ins.data; people.push(p)} otherId=p.id} const checks=[...document.querySelectorAll('[data-assistant-index]')]; for(const cb of checks){if(!cb.checked)continue; const it=items[+cb.dataset.assistantIndex]; const from=it.fromId||otherId, to=it.toId||otherId; if(from&&to)await insertRelationship(from,to,it.rel,it.label)} await refreshData(); showPage('relationships')}
 
-async function requestAccountLink(){const pid=el('accountLinkPerson')?.value; if(!pid)return alert('Choose your person record first.'); const p=person(pid); if(!p)return; const existing=suggestions.find(x=>x.type==='account_link_request'&&x.author_id===currentUserId()&&String(x.status||'open')==='open'); if(existing){alert('A link request is already waiting for approval.');return} const row=await addOptional('suggestions',{type:'account_link_request',person_id:pid,suggested_value:`Link ${session.user.email||userName()} to ${fullName(p)}`,body:`${session.user.email||userName()} says they are ${fullName(p)}.`,author_id:currentUserId(),author_name:userName(),status:'open'}); suggestions.unshift(row); updateDashboard(); renderReview(); alert('Request sent. Julian can approve it in Review.')}
-
 function itemAuthor(x){return x.author_name||x.created_by_email||x.created_by||'Family member'}
 function renderPhotoComments(){const box=el('photoComments'); if(!box)return; const rows=comments.filter(c=>c.photo_id===currentPhoto?.id).slice(0,8); box.innerHTML=rows.length?rows.map(c=>`<div class="comment"><b>${escapeHtml(itemAuthor(c))}</b><br>${escapeHtml(c.body||c.comment||'')}</div>`).join(''):'No comments yet.'}
 async function addPhotoComment(){const body=(el('commentText')?.value||'').trim(); if(!body)return; const row=await addOptional('comments',{photo_id:currentPhoto?.id,body,author_id:currentUserId(),author_name:userName(),status:'open'}); comments.unshift(row); if(el('commentText'))el('commentText').value='';renderPhotoComments();renderReview();setStatus('Comment posted')}
 async function suggestSelectedFaceName(){const f=faces.find(x=>x.id===selectedFaceId); if(!f)return suggestFaceForPhoto(); const body=(el('faceSuggestionText')?.value||el('faceName')?.value||'').trim(); if(!body)return alert('Type the suggested name or correction.'); const row=await addOptional('suggestions',{type:'face_correction',photo_id:f.photo_id,face_id:f.id,person_id:f.person_id||null,suggested_value:titleCaseName(body),body,author_id:currentUserId(),author_name:userName(),status:'open'}); suggestions.unshift(row);renderReview();setStatus('Suggestion sent')}
 async function suggestFaceForPhoto(){if(!currentPhoto)return alert('Open a photo first.'); const body=prompt('Who or what should be added/corrected on this photo?'); if(!body)return; const row=await addOptional('suggestions',{type:'photo_face_suggestion',photo_id:currentPhoto.id,body,suggested_value:body,author_id:currentUserId(),author_name:userName(),status:'open'}); suggestions.unshift(row);renderReview();alert('Suggestion added for review.')}
 async function newFeedbackPrompt(){const title=prompt('Bug or request title'); if(!title)return; const body=prompt('Details'); const row=await addOptional('feedback',{title,body:body||'',kind:'request',status:'open',author_id:currentUserId(),author_name:userName()}); feedback.unshift(row);renderReview();renderDatabase()}
-async function setSuggestionStatus(id,status){if(status==='approved'&&!isOwner())return alert('Only the owner can approve changes.'); const item=suggestions.find(x=>x.id===id); if(status==='approved'&&item?.type==='account_link_request'&&item.author_id&&item.person_id){try{const res=await sb.from('profiles').update({person_id:item.person_id,role:'contributor'}).eq('user_id',item.author_id).select().single(); if(res.error)throw res.error; if(item.author_id===currentUserId())currentProfile=Object.assign(currentProfile||{},res.data)}catch(e){alert('Could not link account: '+(e.message||e));return}} const row=await updateOptional('suggestions',id,{status,reviewed_by:userName(),reviewed_at:new Date().toISOString()}); suggestions=suggestions.map(x=>x.id===id?Object.assign(x,row):x); updateDashboard(); renderReview()}
+async function setSuggestionStatus(id,status){if(status==='approved'&&!isOwner())return alert('Only the owner can approve changes.'); const row=await updateOptional('suggestions',id,{status,reviewed_by:userName(),reviewed_at:new Date().toISOString()}); suggestions=suggestions.map(x=>x.id===id?Object.assign(x,row):x);renderReview()}
 async function setFeedbackStatus(id,status){const row=await updateOptional('feedback',id,{status}); feedback=feedback.map(x=>x.id===id?Object.assign(x,row):x);renderReview();renderDatabase()}
-function renderReview(){safeHTML('suggestionList',`<div class="review-help card"><h3>For Andrew and Lisa</h3><p><b>Photo comments:</b> open a photo and use the comment box. <b>Wishlist / bugs:</b> use the button below or this Review page. <b>Account linking:</b> choose your person on the Dashboard and Julian approves it here.</p><button class="primary" onclick="newFeedbackPrompt()">Add wishlist / bug report</button></div>`+suggestions.map(x=>`<div class="review-item ${escapeHtml(x.status||'open')}"><b>${escapeHtml(x.suggested_value||x.type||'Suggestion')}</b><p>${escapeHtml(x.body||'')}</p><p class="small">${escapeHtml(itemAuthor(x))} · ${escapeHtml(x.status||'open')}</p><div class="review-actions"><button class="owner-only" onclick="setSuggestionStatus('${x.id}','approved')">${x.type==='account_link_request'?'Approve link':'Approve'}</button><button onclick="setSuggestionStatus('${x.id}','rejected')">Reject</button><button onclick="setSuggestionStatus('${x.id}','open')">Reopen</button></div></div>`).join('')||'<p class="small">No suggestions yet.</p>'); safeHTML('commentList',comments.map(x=>`<div class="review-item"><b>${escapeHtml(itemAuthor(x))}</b><p>${escapeHtml(x.body||x.comment||'')}</p></div>`).join('')||'<p class="small">No comments yet.</p>'); safeHTML('feedbackList',`<div class="review-help card"><button class="primary" onclick="newFeedbackPrompt()">Add wishlist / bug report</button></div>`+feedback.map(x=>`<div class="review-item"><b>${escapeHtml(x.title||'Untitled')}</b><p>${escapeHtml(x.body||'')}</p><p class="small">${escapeHtml(itemAuthor(x))} · ${escapeHtml(x.status||'open')}</p><div class="review-actions"><button onclick="setFeedbackStatus('${x.id}','open')">Open</button><button onclick="setFeedbackStatus('${x.id}','done')">Done</button></div></div>`).join('')||'<p class="small">No bugs or requests yet.</p>')}
+function renderReview(){safeHTML('suggestionList',suggestions.map(x=>`<div class="review-item ${escapeHtml(x.status||'open')}"><b>${escapeHtml(x.suggested_value||x.type||'Suggestion')}</b><p>${escapeHtml(x.body||'')}</p><p class="small">${escapeHtml(itemAuthor(x))} · ${escapeHtml(x.status||'open')}</p><div class="review-actions"><button class="owner-only" onclick="setSuggestionStatus('${x.id}','approved')">Approve</button><button onclick="setSuggestionStatus('${x.id}','rejected')">Reject</button><button onclick="setSuggestionStatus('${x.id}','open')">Reopen</button></div></div>`).join('')||'<p class="small">No suggestions yet.</p>'); safeHTML('commentList',comments.map(x=>`<div class="review-item"><b>${escapeHtml(itemAuthor(x))}</b><p>${escapeHtml(x.body||x.comment||'')}</p></div>`).join('')||'<p class="small">No comments yet.</p>'); safeHTML('feedbackList',feedback.map(x=>`<div class="review-item"><b>${escapeHtml(x.title||'Untitled')}</b><p>${escapeHtml(x.body||'')}</p><div class="review-actions"><button onclick="setFeedbackStatus('${x.id}','open')">Open</button><button onclick="setFeedbackStatus('${x.id}','done')">Done</button></div></div>`).join('')||'<p class="small">No bugs or requests yet.</p>')}
 
 function showDbTab(tab,btn){currentDbTab=tab;selectedDbId=null;document.querySelectorAll('.db-tab').forEach(b=>b.classList.remove('active'));btn?.classList.add('active');renderDatabase()}
 function dbQuery(){return (el('dbSearch')?.value||'').trim().toLowerCase()} function dbDate(v){return v?escapeHtml(v):'—'}
@@ -296,15 +294,181 @@ function showDeathDateField(){const wrap=el('deathFieldWrap'); if(wrap)wrap.oute
 async function savePersonRecord(id){const p=person(id); if(!p)return; const name=titleCaseName(el('editDisplayName')?.value||fullName(p)); const patch={display_name:name,given_names:titleCaseName(el('editGiven')?.value||name.split(' ')[0]),family_name:titleCaseName(el('editFamily')?.value||name.split(' ').slice(1).join(' '))||null,birth_date:el('editBirth')?.value||null}; if(el('editDeath'))patch.death_date=el('editDeath').value||null; const res=await sb.from('people').update(patch).eq('id',id).select().single(); if(res.error){alert(res.error.message);return} Object.assign(p,res.data); faces.filter(f=>f.person_id===id).forEach(f=>f.label=fullName(p)); await sb.from('faces').update({label:fullName(p)}).eq('person_id',id); setStatus('Person saved'); await refreshData()}
 async function savePhotoRecord(id){const ph=photos.find(x=>x.id===id); if(!ph)return; const patch={title:el('editPhotoTitle')?.value||null}; const dv=el('editPhotoDate')?.value||null,lv=el('editPhotoLocation')?.value||null,cv=el('editPhotoCaption')?.value||null; ['date_taken','photo_date','taken_at'].forEach(k=>{if(k in ph)patch[k]=dv}); ['location','place'].forEach(k=>{if(k in ph)patch[k]=lv}); ['caption','description'].forEach(k=>{if(k in ph)patch[k]=cv}); const res=await sb.from('photos').update(patch).eq('id',id).select().single(); if(res.error){alert(res.error.message);return} Object.assign(ph,res.data);setStatus('Photo saved');renderDatabase();renderPhotoSidebar()}
 
-function partnerPairs(){const out=[],seen=new Set(); relationships.filter(r=>r.relationship_type==='partner').forEach(r=>{const a=person(r.from_person_id),b=person(r.to_person_id); if(!isRealPerson(a)||!isRealPerson(b))return; const key=[a.id,b.id].sort().join('|'); if(seen.has(key))return; seen.add(key); out.push([a.id,b.id])}); return out}
-function generationDepth(id,seen=new Set()){if(seen.has(id))return 0; seen.add(id); const ps=parentsOf(id).filter(pid=>isRealPerson(person(pid))); if(!ps.length)return 0; return 1+Math.max(...ps.map(p=>generationDepth(p,seen)))}
-function parentGroups(){const groups={}; relationships.filter(r=>r.relationship_type==='parent'&&isRealPerson(person(r.from_person_id))&&isRealPerson(person(r.to_person_id))).forEach(r=>{const child=r.to_person_id; const ps=parentsOf(child).filter(pid=>isRealPerson(person(pid))).sort(); const key=ps.join('|')||r.from_person_id; if(!groups[key])groups[key]={parents:ps.length?ps:[r.from_person_id],children:[]}; if(!groups[key].children.includes(child))groups[key].children.push(child)}); return Object.values(groups)}
-function populateTreeFocus(){const sel=el('treeFocusSelect'); if(!sel)return; const old=treeFocusId||sel.value; sel.innerHTML='<option value="">Whole archive</option>'+visiblePeople().map(p=>`<option value="${p.id}">${escapeHtml(fullName(p))}</option>`).join(''); sel.value=old||''; document.querySelectorAll('.tree-mode-btn').forEach(b=>b.classList.toggle('primary',b.dataset.mode===treeMode)); applyTheme(currentTheme)}
+function partnerPairs(){
+  const out=[],seen=new Set();
+  relationships.filter(r=>r.relationship_type==='partner').forEach(r=>{
+    const a=person(r.from_person_id),b=person(r.to_person_id);
+    if(!isRealPerson(a)||!isRealPerson(b))return;
+    const key=[a.id,b.id].sort().join('|');
+    if(seen.has(key))return;
+    seen.add(key);
+    out.push([a.id,b.id]);
+  });
+  return out;
+}
+
+function parentFacts(){
+  return relationships.filter(r=>r.relationship_type==='parent'&&isRealPerson(person(r.from_person_id))&&isRealPerson(person(r.to_person_id)));
+}
+function generationDepth(id,seen=new Set()){
+  if(seen.has(id))return 0;
+  seen.add(id);
+  const ps=parentFacts().filter(r=>r.to_person_id===id).map(r=>r.from_person_id);
+  if(!ps.length)return 0;
+  return 1+Math.max(...ps.map(p=>generationDepth(p,new Set(seen))));
+}
+function parentGroups(){
+  const groups={};
+  parentFacts().forEach(r=>{
+    const child=r.to_person_id;
+    const ps=parentFacts().filter(x=>x.to_person_id===child).map(x=>x.from_person_id).filter((v,i,a)=>a.indexOf(v)===i).sort((a,b)=>fullName(person(a)).localeCompare(fullName(person(b))));
+    const key=ps.join('|')||r.from_person_id;
+    if(!groups[key])groups[key]={parents:ps.length?ps:[r.from_person_id],children:[]};
+    if(!groups[key].children.includes(child))groups[key].children.push(child);
+  });
+  Object.values(groups).forEach(g=>g.children.sort((a,b)=>fullName(person(a)).localeCompare(fullName(person(b)))));
+  return Object.values(groups);
+}
+function populateTreeFocus(){
+  const sel=el('treeFocusSelect'); if(!sel)return;
+  const old=treeFocusId||sel.value;
+  sel.innerHTML='<option value="">Whole archive</option>'+visiblePeople().map(p=>`<option value="${p.id}">${escapeHtml(fullName(p))}</option>`).join('');
+  sel.value=old||'';
+  document.querySelectorAll('.tree-mode-btn').forEach(b=>b.classList.toggle('primary',b.dataset.mode===treeMode));
+  applyTheme(currentTheme);
+}
 function setGraphFocus(id){treeFocusId=id; renderGraph()}
 function setTreeMode(mode){treeMode=mode; populateTreeFocus(); renderGraph()}
-function peopleForTree(){let ids=new Set(visiblePeople().map(p=>p.id)); if(treeMode==='ancestors'&&treeFocusId){ids=new Set([treeFocusId]); const walk=id=>parentsOf(id).forEach(p=>{ids.add(p);walk(p)}); walk(treeFocusId)} else if(treeMode==='descendants'&&treeFocusId){ids=new Set([treeFocusId]); const walk=id=>childrenOf(id).forEach(c=>{ids.add(c);walk(c)}); walk(treeFocusId)} else if(treeMode==='focus'&&treeFocusId){ids=new Set([treeFocusId,...parentsOf(treeFocusId),...childrenOf(treeFocusId),...partnersOf(treeFocusId)]); parentsOf(treeFocusId).forEach(p=>parentsOf(p).forEach(g=>ids.add(g))); childrenOf(treeFocusId).forEach(c=>childrenOf(c).forEach(g=>ids.add(g)))} else if(treeMode==='photo'&&currentPhoto){ids=new Set(faces.filter(f=>f.photo_id===currentPhoto.id&&f.person_id).map(f=>f.person_id))} return ids}
-function layoutPositions(){const include=peopleForTree(),real=visiblePeople().filter(p=>include.has(p.id)),pos={},nodeW=178,unitGap=28,rowGap=250,startY=120; const partner=new Map(); partnerPairs().forEach(([a,b])=>{partner.set(a,b);partner.set(b,a)}); const depth={}; real.forEach(p=>depth[p.id]=generationDepth(p.id)); for(let i=0;i<6;i++)partnerPairs().forEach(([a,b])=>{if(!include.has(a)||!include.has(b))return; const d=Math.max(depth[a]||0,depth[b]||0); depth[a]=d;depth[b]=d}); const unitsByRow={},used=new Set(); real.forEach(p=>{if(used.has(p.id))return; const q=partner.get(p.id); let members=[p.id]; if(q&&!used.has(q)&&include.has(q)&&(depth[q]||0)===(depth[p.id]||0)){members=[p.id,q].sort((a,b)=>fullName(person(a)).localeCompare(fullName(person(b))));used.add(q)} used.add(p.id); const d=depth[p.id]||0; (unitsByRow[d]||=[]).push({members,x:0,width:members.length*nodeW+(members.length-1)*unitGap})}); Object.values(unitsByRow).forEach(units=>units.sort((u,v)=>fullName(person(u.members[0])).localeCompare(fullName(person(v.members[0]))))); Object.entries(unitsByRow).forEach(([d,units])=>{let x=160; units.forEach(u=>{u.x=x; x+=u.width+80})}); const findUnit=id=>Object.values(unitsByRow).flat().find(u=>u.members.includes(id)); const unitCenter=u=>u.x+u.width/2; const setUnitX=(u,x)=>u.x=x; parentGroups().forEach(g=>{const parentUnits=[...new Set(g.parents.filter(id=>include.has(id)).map(findUnit).filter(Boolean))]; const childUnits=[...new Set(g.children.filter(id=>include.has(id)).map(findUnit).filter(Boolean))]; if(!parentUnits.length||!childUnits.length)return; const pc=parentUnits.reduce((s,u)=>s+unitCenter(u),0)/parentUnits.length; const total=childUnits.reduce((s,u)=>s+u.width,0)+(childUnits.length-1)*80; let x=pc-total/2; childUnits.forEach(u=>{setUnitX(u,x);x+=u.width+80})}); Object.entries(unitsByRow).forEach(([d,units])=>{units.sort((a,b)=>a.x-b.x); let min=80; units.forEach(u=>{if(u.x<min)u.x=min;min=u.x+u.width+70}); const y=startY+Number(d)*rowGap; units.forEach(u=>u.members.forEach((id,i)=>{pos[id]={x:u.x+i*(nodeW+unitGap),y,unit:u}}))}); return pos}
-async function renderGraph(){const graph=el('graph'); if(!graph)return; graph.innerHTML='<div class="graph-inner" id="graphInner"></div>'; const inner=el('graphInner'),pos=layoutPositions(),nodeW=178,nodeH=140,include=peopleForTree(); partnerPairs().forEach(([a,b])=>{if(!include.has(a)||!include.has(b)||!pos[a]||!pos[b])return; const left=pos[a].x<pos[b].x?a:b,right=left===a?b:a; const y=pos[left].y+62; drawH(inner,pos[left].x+nodeW,y,pos[right].x-(pos[left].x+nodeW)); label(inner,(pos[left].x+nodeW+pos[right].x)/2-28,y-24,'Partner')}); parentGroups().forEach(g=>{const parents=g.parents.filter(id=>include.has(id)&&pos[id]),children=g.children.filter(id=>include.has(id)&&pos[id]); if(!parents.length||!children.length)return; const pc=parents.reduce((s,id)=>s+pos[id].x+nodeW/2,0)/parents.length; const parentBottom=Math.max(...parents.map(id=>pos[id].y+nodeH)); const childTop=Math.min(...children.map(id=>pos[id].y)); const busY=(parentBottom+childTop)/2; drawV(inner,pc,parentBottom,busY-parentBottom); const left=Math.min(...children.map(id=>pos[id].x+nodeW/2)),right=Math.max(...children.map(id=>pos[id].x+nodeW/2)); drawH(inner,left,busY,right-left); children.forEach(id=>drawV(inner,pos[id].x+nodeW/2,busY,pos[id].y-busY))}); for(const p of visiblePeople().filter(p=>include.has(p.id))){const xy=pos[p.id]||{x:100,y:100},n=document.createElement('button');n.className='node tree-node'+(p.id===treeFocusId?' selected-node':'');n.style.left=xy.x+'px';n.style.top=xy.y+'px';n.onclick=()=>showPerson(p.id);n.innerHTML=`${await photoHtml(p,64)}<strong>${escapeHtml(fullName(p))}</strong><span class="small">${p.birth_date||''}${p.death_date?' – '+p.death_date:''}</span>`; inner.appendChild(n)} applyGraphZoom()}
+function peopleForTree(){
+  let ids=new Set(visiblePeople().map(p=>p.id));
+  if(treeMode==='ancestors'&&treeFocusId){
+    ids=new Set([treeFocusId]);
+    const walk=id=>parentFacts().filter(r=>r.to_person_id===id).forEach(r=>{ids.add(r.from_person_id);walk(r.from_person_id)});
+    walk(treeFocusId);
+    partnersOf(treeFocusId).forEach(p=>ids.add(p));
+  } else if(treeMode==='descendants'&&treeFocusId){
+    ids=new Set([treeFocusId]);
+    const walk=id=>parentFacts().filter(r=>r.from_person_id===id).forEach(r=>{ids.add(r.to_person_id);walk(r.to_person_id)});
+    walk(treeFocusId);
+    partnersOf(treeFocusId).forEach(p=>ids.add(p));
+  } else if(treeMode==='focus'&&treeFocusId){
+    ids=new Set([treeFocusId]);
+    parentsOf(treeFocusId).forEach(p=>ids.add(p));
+    childrenOf(treeFocusId).forEach(c=>ids.add(c));
+    partnersOf(treeFocusId).forEach(p=>ids.add(p));
+    parentsOf(treeFocusId).forEach(p=>childrenOf(p).forEach(s=>ids.add(s)));
+    childrenOf(treeFocusId).forEach(c=>childrenOf(c).forEach(g=>ids.add(g)));
+  } else if(treeMode==='photo'&&currentPhoto){
+    ids=new Set(faces.filter(f=>f.photo_id===currentPhoto.id&&f.person_id).map(f=>f.person_id));
+  }
+  return ids;
+}
+function layoutPositions(){
+  const include=peopleForTree();
+  const real=visiblePeople().filter(p=>include.has(p.id));
+  const pos={},nodeW=178,unitGap=24,rowGap=230,startY=115;
+  const depth={};
+  real.forEach(p=>depth[p.id]=generationDepth(p.id));
+
+  // Partners can sit beside each other, but never move people up/down the tree
+  // except where neither person has parent facts and they would otherwise split rows.
+  for(let i=0;i<4;i++)partnerPairs().forEach(([a,b])=>{
+    if(!include.has(a)||!include.has(b))return;
+    const pa=parentsOf(a).length,pb=parentsOf(b).length;
+    if(!pa&&!pb){const d=Math.max(depth[a]||0,depth[b]||0);depth[a]=d;depth[b]=d;}
+  });
+
+  const partner=new Map();
+  partnerPairs().forEach(([a,b])=>{partner.set(a,b);partner.set(b,a)});
+  const unitsByRow={},used=new Set();
+  real.forEach(p=>{
+    if(used.has(p.id))return;
+    const q=partner.get(p.id);
+    let members=[p.id];
+    if(q&&!used.has(q)&&include.has(q)&&(depth[q]||0)===(depth[p.id]||0)){
+      members=[p.id,q].sort((a,b)=>fullName(person(a)).localeCompare(fullName(person(b))));
+      used.add(q);
+    }
+    used.add(p.id);
+    const d=depth[p.id]||0;
+    (unitsByRow[d]||=[]).push({members,x:0,width:members.length*nodeW+(members.length-1)*unitGap});
+  });
+
+  const allUnits=()=>Object.values(unitsByRow).flat();
+  const findUnit=id=>allUnits().find(u=>u.members.includes(id));
+  const unitCenter=u=>u.x+u.width/2;
+
+  Object.values(unitsByRow).forEach(units=>units.sort((u,v)=>fullName(person(u.members[0])).localeCompare(fullName(person(v.members[0])))));
+  Object.entries(unitsByRow).forEach(([d,units])=>{let x=120; units.forEach(u=>{u.x=x; x+=u.width+82})});
+
+  // Centre children under their actual recorded parent group only.
+  parentGroups().forEach(g=>{
+    const parentUnits=[...new Set(g.parents.filter(id=>include.has(id)).map(findUnit).filter(Boolean))];
+    const childUnits=[...new Set(g.children.filter(id=>include.has(id)).map(findUnit).filter(Boolean))];
+    if(!parentUnits.length||!childUnits.length)return;
+    const pc=parentUnits.reduce((s,u)=>s+unitCenter(u),0)/parentUnits.length;
+    const total=childUnits.reduce((s,u)=>s+u.width,0)+(childUnits.length-1)*82;
+    let x=pc-total/2;
+    childUnits.forEach(u=>{u.x=x;x+=u.width+82});
+  });
+
+  // Resolve overlaps row-by-row without changing generation.
+  Object.entries(unitsByRow).forEach(([d,units])=>{
+    units.sort((a,b)=>a.x-b.x);
+    let min=80;
+    units.forEach(u=>{if(u.x<min)u.x=min;min=u.x+u.width+70});
+    const y=startY+Number(d)*rowGap;
+    units.forEach(u=>u.members.forEach((id,i)=>{pos[id]={x:u.x+i*(nodeW+unitGap),y,unit:u}}));
+  });
+  return pos;
+}
+async function renderGraph(){
+  const graph=el('graph'); if(!graph)return;
+  graph.innerHTML='<div class="graph-inner" id="graphInner"></div>';
+  const inner=el('graphInner'),pos=layoutPositions(),nodeW=178,nodeH=134,include=peopleForTree();
+
+  // Pair links are visual only: a double-ended arrow, never structure.
+  partnerPairs().forEach(([a,b])=>{
+    if(!include.has(a)||!include.has(b)||!pos[a]||!pos[b])return;
+    if(Math.abs(pos[a].y-pos[b].y)>8)return;
+    const left=pos[a].x<pos[b].x?a:b,right=left===a?b:a;
+    const y=pos[left].y+56;
+    drawH(inner,pos[left].x+nodeW,y,pos[right].x-(pos[left].x+nodeW),'partner-line');
+    label(inner,(pos[left].x+nodeW+pos[right].x)/2-12,y-18,'↔');
+  });
+
+  parentGroups().forEach(g=>{
+    const parents=g.parents.filter(id=>include.has(id)&&pos[id]),children=g.children.filter(id=>include.has(id)&&pos[id]);
+    if(!parents.length||!children.length)return;
+    const pc=parents.reduce((s,id)=>s+pos[id].x+nodeW/2,0)/parents.length;
+    const parentBottom=Math.max(...parents.map(id=>pos[id].y+nodeH));
+    const childTop=Math.min(...children.map(id=>pos[id].y));
+    const busY=(parentBottom+childTop)/2;
+    drawV(inner,pc,parentBottom,busY-parentBottom);
+    const left=Math.min(...children.map(id=>pos[id].x+nodeW/2)),right=Math.max(...children.map(id=>pos[id].x+nodeW/2));
+    drawH(inner,left,busY,right-left);
+    children.forEach(id=>drawV(inner,pos[id].x+nodeW/2,busY,pos[id].y-busY));
+  });
+
+  for(const p of visiblePeople().filter(p=>include.has(p.id))){
+    const xy=pos[p.id]||{x:100,y:100},n=document.createElement('button');
+    n.className='node tree-node'+(p.id===treeFocusId?' selected-node':'');
+    n.style.left=xy.x+'px';n.style.top=xy.y+'px';n.onclick=()=>showPerson(p.id);
+    n.innerHTML=`${await photoHtml(p,64)}<strong>${escapeHtml(fullName(p))}</strong><span class="small">${p.birth_date||''}${p.death_date?' – '+p.death_date:''}</span>`;
+    inner.appendChild(n);
+  }
+  renderTreeWarnings(include);
+  applyGraphZoom();
+}
+function renderTreeWarnings(include){
+  const graph=el('graph'); if(!graph)return;
+  const unplaced=visiblePeople().filter(p=>include.has(p.id)&&!parentsOf(p.id).length&&!childrenOf(p.id).length&&!partnersOf(p.id).length);
+  const siblingOnly=relationships.filter(r=>r.relationship_type==='sibling').filter(r=>include.has(r.from_person_id)||include.has(r.to_person_id)).length;
+  if(!unplaced.length&&!siblingOnly)return;
+  const note=document.createElement('div'); note.className='tree-note';
+  note.innerHTML=`<b>Tree notes</b><br>${siblingOnly?`Sibling records are ignored for layout. `:''}${unplaced.length?`${unplaced.length} people need parent/child facts before they can be placed confidently.`:''}`;
+  graph.appendChild(note);
+}
 function drawH(g,x,y,w){const e=document.createElement('div');e.className='line h';if(w<0){e.style.left=x+w+'px';e.style.width=-w+'px'}else{e.style.left=x+'px';e.style.width=w+'px'}e.style.top=y+'px';g.appendChild(e)}
 function drawV(g,x,y,h){const e=document.createElement('div');e.className='line v';e.style.left=x+'px';e.style.top=y+'px';e.style.height=Math.max(0,h)+'px';g.appendChild(e)}
 function label(g,x,y,text){const e=document.createElement('div');e.className='rel-label';e.style.left=x+'px';e.style.top=y+'px';e.textContent=text;g.appendChild(e)}
@@ -313,5 +477,5 @@ function zoomGraph(delta){const wrap=el('graphWrap'); if(!wrap)return; const old
 function resetGraphZoom(){graphScale=1;applyGraphZoom()}
 function fitGraph(){const wrap=el('graphWrap'); if(!wrap)return; graphScale=.78;applyGraphZoom();wrap.scrollLeft=60;wrap.scrollTop=40}
 
-Object.assign(window,{sendLogin,signOut,showPage,refreshData,setEditMode,uploadPhoto,selectPhotoById,selectLatestPhoto,previousPhoto,nextPhoto,detectFacesOnPhoto,addFaceBox,deleteSelectedFace,attachFaceToExisting,saveFaceName,suggestSelectedFaceName,suggestFaceForPhoto,toggleFaceBoxes,toggleFaceNames,saveCurrentPhotoDetails,addPhotoComment,setRel,saveRelationship,deleteRelationship,renderRelationshipAssistant,queueRelationshipAssistantRender,saveAssistantRelationships,newFeedbackPrompt,setSuggestionStatus,setFeedbackStatus,addUnknownPerson,deletePerson,showPerson,linkMyProfileToPerson,focusTreeOnPerson,showDbTab,renderDatabase,selectDbPerson,selectDbPhoto,savePersonRecord,savePhotoRecord,showDeathDateField,renderGraph,fitGraph,zoomGraph,resetGraphZoom,setGraphFocus,setTreeMode,setSelectedFaceAsProfilePhoto,generateSelectedFaceThumbnail,applyTheme,titleCaseName,requestAccountLink});
+Object.assign(window,{sendLogin,signOut,showPage,refreshData,setEditMode,uploadPhoto,selectPhotoById,selectLatestPhoto,previousPhoto,nextPhoto,detectFacesOnPhoto,addFaceBox,deleteSelectedFace,attachFaceToExisting,saveFaceName,suggestSelectedFaceName,suggestFaceForPhoto,toggleFaceBoxes,toggleFaceNames,saveCurrentPhotoDetails,addPhotoComment,setRel,saveRelationship,deleteRelationship,renderRelationshipAssistant,queueRelationshipAssistantRender,saveAssistantRelationships,newFeedbackPrompt,setSuggestionStatus,setFeedbackStatus,addUnknownPerson,deletePerson,showPerson,linkMyProfileToPerson,focusTreeOnPerson,showDbTab,renderDatabase,selectDbPerson,selectDbPhoto,savePersonRecord,savePhotoRecord,showDeathDateField,renderGraph,fitGraph,zoomGraph,resetGraphZoom,setGraphFocus,setTreeMode,setSelectedFaceAsProfilePhoto,generateSelectedFaceThumbnail,applyTheme,titleCaseName});
 boot();
