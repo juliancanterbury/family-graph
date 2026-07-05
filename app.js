@@ -221,15 +221,14 @@ function isExplicitProfileFace(f){
   const explicitId=p?.profile_face_id || storedProfileFaceId(f.person_id);
   return !!explicitId && explicitId===f.id;
 }
+function hasGeneratedThumb(f){return !!faceThumbPath(f)}
 async function cropStyle(f,size=92){
   if(!f)return'';
-  // Only use generated thumbnail when this face has been explicitly chosen
-  // as the person's profile photo. Otherwise keep the older working crop
-  // behaviour, so tagging a newer face cannot disturb existing portraits.
-  if(isExplicitProfileFace(f)){
-    const thumb=await faceThumbUrl(f);
-    if(thumb)return `background-image:url('${thumb}') !important;background-size:cover !important;background-position:center center !important;background-repeat:no-repeat !important;`;
-  }
+  // Use a real generated thumbnail whenever it exists. This is now the
+  // single reliable display path for sidebar, People, Tree and Profile.
+  // Faces without thumbnails still use the older working crop fallback.
+  const thumb=await faceThumbUrl(f);
+  if(thumb)return `background-image:url('${thumb}') !important;background-size:cover !important;background-position:center center !important;background-repeat:no-repeat !important;`;
   const ph=photos.find(p=>p.id===f.photo_id);
   if(!ph)return'';
   const url=await photoUrl(ph);
