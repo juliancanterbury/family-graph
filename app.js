@@ -29,9 +29,17 @@ function isOwner(){return role()==='owner'}
 function canEdit(){return ['owner','editor','family editor','contributor'].includes(role())}
 function canDelete(){return isOwner()}
 function canAdmin(){return ['owner','editor','family editor'].includes(role())}
+function canSeeTree(){return isOwner()}
 function userName(){return currentProfile?.display_name||session?.user?.email||'Someone'}
 function currentUserId(){return session?.user?.id||'local'}
-function setModeClasses(){document.body.classList.toggle('can-edit',canEdit());document.body.classList.toggle('can-delete',canDelete());document.body.classList.toggle('edit-mode',editMode);document.body.classList.toggle('can-admin',canAdmin())}
+function setModeClasses(){
+  document.body.classList.toggle('can-edit',canEdit());
+  document.body.classList.toggle('can-delete',canDelete());
+  document.body.classList.toggle('edit-mode',editMode);
+  document.body.classList.toggle('can-admin',canAdmin());
+  document.body.classList.toggle('can-tree',canSeeTree());
+  document.querySelectorAll('nav button[data-page="graph"], nav button[data-page="admin"]').forEach(b=>{b.style.display=isOwner()?'':'none'});
+}
 function localKey(name){return 'familyGraph:'+name}
 function loadLocal(name){try{return JSON.parse(localStorage.getItem(localKey(name))||'[]')}catch(e){return []}}
 function saveLocal(name,data){localStorage.setItem(localKey(name),JSON.stringify(data))}
@@ -51,7 +59,7 @@ async function ensureProfile(){const user=session.user,email=user.email||''; con
 async function loadAll(){setStatus('Loading…'); const [p,ph,f,r]=await Promise.all([sb.from('people').select('*').order('created_at'),sb.from('photos').select('*').order('created_at',{ascending:false}),sb.from('faces').select('*').order('created_at'),sb.from('relationships').select('*').order('created_at')]); const err=p.error||ph.error||f.error||r.error; if(err)return problem('Database read failed: '+err.message); people=p.data||[]; photos=ph.data||[]; faces=f.data||[]; relationships=r.data||[]; [suggestions,comments,feedback]=await Promise.all([optionalTable('suggestions'),optionalTable('comments'),optionalTable('feedback')]); currentPhoto=currentPhoto||photos[0]||null; selectedPersonId=selectedPersonId||profilePersonId()||visiblePeople()[0]?.id||null; updateDashboard(); await renderCurrentPhoto(); updateSide(); await renderPeople(); await renderPhotoSidebar(); renderRelationshipList(); populateTreeFocus(); setStatus('Loaded')}
 async function refreshData(){await loadAll(); const page=(location.hash||'#dashboard').replace('#','')||'dashboard'; showPage(page)}
 
-function showPage(page){page=page||'dashboard'; if(!el(page+'Page'))page='dashboard'; if(page==='admin'&&!canAdmin())page='dashboard'; document.querySelectorAll('.page').forEach(p=>p.classList.add('hidden')); el(page+'Page')?.classList.remove('hidden'); setActiveNav(page); if(location.hash!=='#'+page)history.replaceState(null,'','#'+page); if(page!=='photo'){selectedFaceId=null; renderFaceEditor()} if(page==='dashboard')updateDashboard(); if(page==='photo'){renderCurrentPhoto();updateSide();renderPhotoSidebar()} if(page==='people')renderPeople(); if(page==='person')renderPersonProfile(); if(page==='relationships'){renderRelationshipAssistant();renderRelationshipList()} if(page==='review')renderReview(); if(page==='admin')renderDatabase(); if(page==='graph'){populateTreeFocus();renderGraph();setTimeout(fitGraph,0)}}
+function showPage(page){page=page||'dashboard'; if(!el(page+'Page'))page='dashboard'; if((page==='admin'||page==='graph')&&!isOwner())page='dashboard'; document.querySelectorAll('.page').forEach(p=>p.classList.add('hidden')); el(page+'Page')?.classList.remove('hidden'); setActiveNav(page); if(location.hash!=='#'+page)history.replaceState(null,'','#'+page); if(page!=='photo'){selectedFaceId=null; renderFaceEditor()} if(page==='dashboard')updateDashboard(); if(page==='photo'){renderCurrentPhoto();updateSide();renderPhotoSidebar()} if(page==='people')renderPeople(); if(page==='person')renderPersonProfile(); if(page==='relationships'){renderRelationshipAssistant();renderRelationshipList()} if(page==='review')renderReview(); if(page==='admin')renderDatabase(); if(page==='graph'){populateTreeFocus();renderGraph();setTimeout(fitGraph,0)}}
 window.addEventListener('hashchange',()=>{const page=(location.hash||'#dashboard').replace('#','')||'dashboard';showPage(page)});
 function setEditMode(on){editMode=!!on; setModeClasses(); el('viewModeBtn')?.classList.toggle('primary',!editMode); el('editModeBtn')?.classList.toggle('primary',editMode)}
 
@@ -247,9 +255,9 @@ async function hydrateAsyncPortraits(){for(const e of [...document.querySelector
 
 async function renderPeople(){const list=el('peopleList'); if(!list)return; let html=''; for(const p of visiblePeople()){html+=`<button class="people-card person-button" onclick="showPerson('${p.id}')">${await photoHtml(p)}<strong>${escapeHtml(fullName(p))}</strong><p>${p.birth_date||'No dates yet'}${p.death_date?' – '+p.death_date:''}</p></button>`} list.innerHTML=html||'<p>No people yet.</p>'}
 function showPerson(id){selectedPersonId=id;showPage('person');renderPersonProfile()}
-async function renderPersonProfile(){const box=el('personProfile'); if(!box)return; const p=person(selectedPersonId)||visiblePeople()[0]; if(!p){box.innerHTML='<p>No person selected.</p>';return} selectedPersonId=p.id; const rels=relationships.filter(r=>r.from_person_id===p.id||r.to_person_id===p.id); const tagged=faces.filter(f=>f.person_id===p.id); const photoIds=[...new Set(tagged.map(f=>f.photo_id))]; let photosHtml=''; for(const pid of photoIds.slice(0,12)){const ph=photos.find(x=>x.id===pid); if(!ph)continue; photosHtml+=`<button class="mini-photo" onclick="selectPhotoById('${ph.id}');showPage('photo')"><img src="${await photoUrl(ph)}" alt=""><span>${escapeHtml(photoTitle(ph))}</span></button>`} box.innerHTML=`<div class="person-hero card">${await photoHtml(p,96)}<div><h2>${escapeHtml(fullName(p))}</h2><p>${escapeHtml(p.birth_date||'')}${p.death_date?' – '+escapeHtml(p.death_date):''}</p><p class="small">${tagged.length} tagged face${tagged.length===1?'':'s'} · ${rels.length} direct relationship${rels.length===1?'':'s'}</p></div><div class="person-actions"><button class="primary" onclick="focusTreeOnPerson('${p.id}')">Focus in tree</button><button onclick="linkMyProfileToPerson('${p.id}')">Link my login to this person</button></div></div><div class="person-profile-grid"><section class="card"><h2>Photos</h2><div class="mini-photo-grid">${photosHtml||'<p class="small">No tagged photos yet.</p>'}</div></section><section class="card"><h2>Direct relationships</h2><div class="relationship-list">${rels.map(r=>`<div class="rel-row"><strong>${escapeHtml(relationshipSentence(r))}</strong></div>`).join('')||'<p class="small">No direct relationships yet.</p>'}</div></section></div>`}
+async function renderPersonProfile(){const box=el('personProfile'); if(!box)return; const p=person(selectedPersonId)||visiblePeople()[0]; if(!p){box.innerHTML='<p>No person selected.</p>';return} selectedPersonId=p.id; const rels=relationships.filter(r=>r.from_person_id===p.id||r.to_person_id===p.id); const tagged=faces.filter(f=>f.person_id===p.id); const photoIds=[...new Set(tagged.map(f=>f.photo_id))]; let photosHtml=''; for(const pid of photoIds.slice(0,12)){const ph=photos.find(x=>x.id===pid); if(!ph)continue; photosHtml+=`<button class="mini-photo" onclick="selectPhotoById('${ph.id}');showPage('photo')"><img src="${await photoUrl(ph)}" alt=""><span>${escapeHtml(photoTitle(ph))}</span></button>`} box.innerHTML=`<div class="person-hero card">${await photoHtml(p,96)}<div><h2>${escapeHtml(fullName(p))}</h2><p>${escapeHtml(p.birth_date||'')}${p.death_date?' – '+escapeHtml(p.death_date):''}</p><p class="small">${tagged.length} tagged face${tagged.length===1?'':'s'} · ${rels.length} direct relationship${rels.length===1?'':'s'}</p></div><div class="person-actions">${isOwner()?`<button class="primary" onclick="focusTreeOnPerson('${p.id}')">Focus in tree</button>`:''}<button onclick="linkMyProfileToPerson('${p.id}')">Link my login to this person</button></div></div><div class="person-profile-grid"><section class="card"><h2>Photos</h2><div class="mini-photo-grid">${photosHtml||'<p class="small">No tagged photos yet.</p>'}</div></section><section class="card"><h2>Direct relationships</h2><div class="relationship-list">${rels.map(r=>`<div class="rel-row"><strong>${escapeHtml(relationshipSentence(r))}</strong></div>`).join('')||'<p class="small">No direct relationships yet.</p>'}</div></section></div>`}
 async function linkMyProfileToPerson(id){const p=person(id); if(!p)return; try{const r=await sb.from('profiles').update({person_id:id}).eq('user_id',session.user.id).select().single(); if(!r.error)currentProfile=Object.assign(currentProfile||{},r.data)}catch(e){} localStorage.setItem('familyGraph:profilePersonId',id); alert(`This login is now linked to ${fullName(p)}.`); updateDashboard();renderPersonProfile()}
-function focusTreeOnPerson(id){treeFocusId=id;treeMode='focus';showPage('graph')}
+function focusTreeOnPerson(id){if(!isOwner()){showPerson(id);return} treeFocusId=id;treeMode='focus';showPage('graph')}
 async function addUnknownPerson(){const name=titleCaseName(prompt('Full name')||''); if(!name)return; const parts=name.split(' '); const ins=await sb.from('people').insert({display_name:name,given_names:parts[0]||name,family_name:parts.slice(1).join(' ')||null,created_by:session.user.id}).select().single(); if(ins.error){alert(ins.error.message);return} people.push(ins.data); updateDashboard(); await renderPeople(); updateSide()}
 async function deletePerson(id){if(!canDelete())return alert('Only the archive owner can delete people.'); const p=person(id); if(!p)return; if(!confirm(`Delete ${fullName(p)}?`))return; await sb.from('relationships').delete().or(`from_person_id.eq.${id},to_person_id.eq.${id}`); await sb.from('faces').update({person_id:null,label:null,status:'unconfirmed'}).eq('person_id',id); const del=await sb.from('people').delete().eq('id',id); if(del.error){alert(del.error.message);return} people=people.filter(x=>x.id!==id); relationships=relationships.filter(r=>r.from_person_id!==id&&r.to_person_id!==id); faces.forEach(f=>{if(f.person_id===id){f.person_id=null;f.label=null}}); await refreshData()}
 
@@ -301,80 +309,8 @@ function populateTreeFocus(){const sel=el('treeFocusSelect'); if(!sel)return; co
 function setGraphFocus(id){treeFocusId=id; renderGraph()}
 function setTreeMode(mode){treeMode=mode; populateTreeFocus(); renderGraph()}
 function peopleForTree(){let ids=new Set(visiblePeople().map(p=>p.id)); if(treeMode==='ancestors'&&treeFocusId){ids=new Set([treeFocusId]); const walk=id=>parentsOf(id).forEach(p=>{ids.add(p);walk(p)}); walk(treeFocusId)} else if(treeMode==='descendants'&&treeFocusId){ids=new Set([treeFocusId]); const walk=id=>childrenOf(id).forEach(c=>{ids.add(c);walk(c)}); walk(treeFocusId)} else if(treeMode==='focus'&&treeFocusId){ids=new Set([treeFocusId,...parentsOf(treeFocusId),...childrenOf(treeFocusId),...partnersOf(treeFocusId)]); parentsOf(treeFocusId).forEach(p=>parentsOf(p).forEach(g=>ids.add(g))); childrenOf(treeFocusId).forEach(c=>childrenOf(c).forEach(g=>ids.add(g)))} else if(treeMode==='photo'&&currentPhoto){ids=new Set(faces.filter(f=>f.photo_id===currentPhoto.id&&f.person_id).map(f=>f.person_id))} return ids}
-function parentPairsFromChildren(){
-  const pairs=[],seen=new Set();
-  parentGroups().forEach(g=>{
-    const ps=(g.parents||[]).filter(id=>isRealPerson(person(id))).sort((a,b)=>fullName(person(a)).localeCompare(fullName(person(b))));
-    if(ps.length<2)return;
-    const key=ps.slice(0,2).sort().join('|');
-    if(seen.has(key))return;
-    seen.add(key);
-    pairs.push([ps[0],ps[1]]);
-  });
-  return pairs;
-}
-function graphCouplePairs(){
-  const out=[],seen=new Set();
-  function add(a,b,forced=false){
-    if(!a||!b||!isRealPerson(person(a))||!isRealPerson(person(b)))return;
-    const key=[a,b].sort().join('|');
-    if(seen.has(key))return;
-    seen.add(key); out.push({a,b,forced});
-  }
-  parentPairsFromChildren().forEach(([a,b])=>add(a,b,true));
-  partnerPairs().forEach(([a,b])=>add(a,b,false));
-  return out;
-}
-function layoutPositions(){
-  const include=peopleForTree(),real=visiblePeople().filter(p=>include.has(p.id)),pos={},nodeW=178,unitGap=28,rowGap=250,startY=120;
-  const pairs=graphCouplePairs().filter(p=>include.has(p.a)&&include.has(p.b));
-  const mate=new Map();
-  pairs.forEach(p=>{if(!mate.has(p.a))mate.set(p.a,p.b); if(!mate.has(p.b))mate.set(p.b,p.a)});
-  const depth={}; real.forEach(p=>depth[p.id]=generationDepth(p.id));
-  // Shared children define parent units. If one parent has known parents and the other does not,
-  // the other parent is lifted/dropped to the same generation rather than becoming a loose root.
-  for(let i=0;i<8;i++)pairs.forEach(({a,b})=>{if(!include.has(a)||!include.has(b))return; const d=Math.max(depth[a]||0,depth[b]||0); depth[a]=d; depth[b]=d});
-  const unitsByRow={},used=new Set();
-  // First create couple/parent units so they cannot be separated later.
-  pairs.forEach(({a,b})=>{
-    if(!include.has(a)||!include.has(b)||used.has(a)||used.has(b))return;
-    const members=[a,b].sort((x,y)=>fullName(person(x)).localeCompare(fullName(person(y))));
-    members.forEach(id=>used.add(id));
-    const d=Math.max(depth[a]||0,depth[b]||0);
-    (unitsByRow[d]||=[]).push({members,x:0,width:members.length*nodeW+(members.length-1)*unitGap});
-  });
-  // Then add single people.
-  real.forEach(p=>{
-    if(used.has(p.id))return;
-    used.add(p.id);
-    const d=depth[p.id]||0;
-    (unitsByRow[d]||=[]).push({members:[p.id],x:0,width:nodeW});
-  });
-  Object.values(unitsByRow).forEach(units=>units.sort((u,v)=>fullName(person(u.members[0])).localeCompare(fullName(person(v.members[0])))));
-  Object.entries(unitsByRow).forEach(([d,units])=>{let x=160; units.forEach(u=>{u.x=x; x+=u.width+100})});
-  const allUnits=()=>Object.values(unitsByRow).flat();
-  const findUnit=id=>allUnits().find(u=>u.members.includes(id));
-  const unitCenter=u=>u.x+u.width/2;
-  const setUnitX=(u,x)=>u.x=x;
-  // Centre children below their actual parent group only. Sibling/partner links never affect generations.
-  parentGroups().forEach(g=>{
-    const parentUnits=[...new Set((g.parents||[]).filter(id=>include.has(id)).map(findUnit).filter(Boolean))];
-    const childUnits=[...new Set((g.children||[]).filter(id=>include.has(id)).map(findUnit).filter(Boolean))];
-    if(!parentUnits.length||!childUnits.length)return;
-    const pc=parentUnits.reduce((s,u)=>s+unitCenter(u),0)/parentUnits.length;
-    const total=childUnits.reduce((s,u)=>s+u.width,0)+(childUnits.length-1)*90;
-    let x=pc-total/2;
-    childUnits.sort((a,b)=>fullName(person(a.members[0])).localeCompare(fullName(person(b.members[0])))).forEach(u=>{setUnitX(u,x);x+=u.width+90});
-  });
-  Object.entries(unitsByRow).forEach(([d,units])=>{
-    units.sort((a,b)=>a.x-b.x); let min=80;
-    units.forEach(u=>{if(u.x<min)u.x=min;min=u.x+u.width+90});
-    const y=startY+Number(d)*rowGap;
-    units.forEach(u=>u.members.forEach((id,i)=>{pos[id]={x:u.x+i*(nodeW+unitGap),y,unit:u}}));
-  });
-  return pos;
-}
-async function renderGraph(){const graph=el('graph'); if(!graph)return; graph.innerHTML='<div class="graph-inner" id="graphInner"></div>'; const inner=el('graphInner'),pos=layoutPositions(),nodeW=178,nodeH=140,include=peopleForTree(); graphCouplePairs().forEach(({a,b})=>{if(!include.has(a)||!include.has(b)||!pos[a]||!pos[b])return; const left=pos[a].x<pos[b].x?a:b,right=left===a?b:a; const y=pos[left].y+62; drawH(inner,pos[left].x+nodeW,y,pos[right].x-(pos[left].x+nodeW)); label(inner,(pos[left].x+nodeW+pos[right].x)/2-14,y-24,'↔')}); parentGroups().forEach(g=>{const parents=g.parents.filter(id=>include.has(id)&&pos[id]),children=g.children.filter(id=>include.has(id)&&pos[id]); if(!parents.length||!children.length)return; const pc=parents.reduce((s,id)=>s+pos[id].x+nodeW/2,0)/parents.length; const parentBottom=Math.max(...parents.map(id=>pos[id].y+nodeH)); const childTop=Math.min(...children.map(id=>pos[id].y)); const busY=(parentBottom+childTop)/2; drawV(inner,pc,parentBottom,busY-parentBottom); const left=Math.min(...children.map(id=>pos[id].x+nodeW/2)),right=Math.max(...children.map(id=>pos[id].x+nodeW/2)); drawH(inner,left,busY,right-left); children.forEach(id=>drawV(inner,pos[id].x+nodeW/2,busY,pos[id].y-busY))}); for(const p of visiblePeople().filter(p=>include.has(p.id))){const xy=pos[p.id]||{x:100,y:100},n=document.createElement('button');n.className='node tree-node'+(p.id===treeFocusId?' selected-node':'');n.style.left=xy.x+'px';n.style.top=xy.y+'px';n.onclick=()=>showPerson(p.id);n.innerHTML=`${await photoHtml(p,64)}<strong>${escapeHtml(fullName(p))}</strong><span class="small">${p.birth_date||''}${p.death_date?' – '+p.death_date:''}</span>`; inner.appendChild(n)} applyGraphZoom()}
+function layoutPositions(){const include=peopleForTree(),real=visiblePeople().filter(p=>include.has(p.id)),pos={},nodeW=178,unitGap=28,rowGap=250,startY=120; const partner=new Map(); partnerPairs().forEach(([a,b])=>{partner.set(a,b);partner.set(b,a)}); const depth={}; real.forEach(p=>depth[p.id]=generationDepth(p.id)); for(let i=0;i<6;i++)partnerPairs().forEach(([a,b])=>{if(!include.has(a)||!include.has(b))return; const d=Math.max(depth[a]||0,depth[b]||0); depth[a]=d;depth[b]=d}); const unitsByRow={},used=new Set(); real.forEach(p=>{if(used.has(p.id))return; const q=partner.get(p.id); let members=[p.id]; if(q&&!used.has(q)&&include.has(q)&&(depth[q]||0)===(depth[p.id]||0)){members=[p.id,q].sort((a,b)=>fullName(person(a)).localeCompare(fullName(person(b))));used.add(q)} used.add(p.id); const d=depth[p.id]||0; (unitsByRow[d]||=[]).push({members,x:0,width:members.length*nodeW+(members.length-1)*unitGap})}); Object.values(unitsByRow).forEach(units=>units.sort((u,v)=>fullName(person(u.members[0])).localeCompare(fullName(person(v.members[0]))))); Object.entries(unitsByRow).forEach(([d,units])=>{let x=160; units.forEach(u=>{u.x=x; x+=u.width+80})}); const findUnit=id=>Object.values(unitsByRow).flat().find(u=>u.members.includes(id)); const unitCenter=u=>u.x+u.width/2; const setUnitX=(u,x)=>u.x=x; parentGroups().forEach(g=>{const parentUnits=[...new Set(g.parents.filter(id=>include.has(id)).map(findUnit).filter(Boolean))]; const childUnits=[...new Set(g.children.filter(id=>include.has(id)).map(findUnit).filter(Boolean))]; if(!parentUnits.length||!childUnits.length)return; const pc=parentUnits.reduce((s,u)=>s+unitCenter(u),0)/parentUnits.length; const total=childUnits.reduce((s,u)=>s+u.width,0)+(childUnits.length-1)*80; let x=pc-total/2; childUnits.forEach(u=>{setUnitX(u,x);x+=u.width+80})}); Object.entries(unitsByRow).forEach(([d,units])=>{units.sort((a,b)=>a.x-b.x); let min=80; units.forEach(u=>{if(u.x<min)u.x=min;min=u.x+u.width+70}); const y=startY+Number(d)*rowGap; units.forEach(u=>u.members.forEach((id,i)=>{pos[id]={x:u.x+i*(nodeW+unitGap),y,unit:u}}))}); return pos}
+async function renderGraph(){const graph=el('graph'); if(!graph)return; graph.innerHTML='<div class="graph-inner" id="graphInner"></div>'; const inner=el('graphInner'),pos=layoutPositions(),nodeW=178,nodeH=140,include=peopleForTree(); partnerPairs().forEach(([a,b])=>{if(!include.has(a)||!include.has(b)||!pos[a]||!pos[b])return; const left=pos[a].x<pos[b].x?a:b,right=left===a?b:a; const y=pos[left].y+62; drawH(inner,pos[left].x+nodeW,y,pos[right].x-(pos[left].x+nodeW)); label(inner,(pos[left].x+nodeW+pos[right].x)/2-28,y-24,'Partner')}); parentGroups().forEach(g=>{const parents=g.parents.filter(id=>include.has(id)&&pos[id]),children=g.children.filter(id=>include.has(id)&&pos[id]); if(!parents.length||!children.length)return; const pc=parents.reduce((s,id)=>s+pos[id].x+nodeW/2,0)/parents.length; const parentBottom=Math.max(...parents.map(id=>pos[id].y+nodeH)); const childTop=Math.min(...children.map(id=>pos[id].y)); const busY=(parentBottom+childTop)/2; drawV(inner,pc,parentBottom,busY-parentBottom); const left=Math.min(...children.map(id=>pos[id].x+nodeW/2)),right=Math.max(...children.map(id=>pos[id].x+nodeW/2)); drawH(inner,left,busY,right-left); children.forEach(id=>drawV(inner,pos[id].x+nodeW/2,busY,pos[id].y-busY))}); for(const p of visiblePeople().filter(p=>include.has(p.id))){const xy=pos[p.id]||{x:100,y:100},n=document.createElement('button');n.className='node tree-node'+(p.id===treeFocusId?' selected-node':'');n.style.left=xy.x+'px';n.style.top=xy.y+'px';n.onclick=()=>showPerson(p.id);n.innerHTML=`${await photoHtml(p,64)}<strong>${escapeHtml(fullName(p))}</strong><span class="small">${p.birth_date||''}${p.death_date?' – '+p.death_date:''}</span>`; inner.appendChild(n)} applyGraphZoom()}
 function drawH(g,x,y,w){const e=document.createElement('div');e.className='line h';if(w<0){e.style.left=x+w+'px';e.style.width=-w+'px'}else{e.style.left=x+'px';e.style.width=w+'px'}e.style.top=y+'px';g.appendChild(e)}
 function drawV(g,x,y,h){const e=document.createElement('div');e.className='line v';e.style.left=x+'px';e.style.top=y+'px';e.style.height=Math.max(0,h)+'px';g.appendChild(e)}
 function label(g,x,y,text){const e=document.createElement('div');e.className='rel-label';e.style.left=x+'px';e.style.top=y+'px';e.textContent=text;g.appendChild(e)}
