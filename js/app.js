@@ -17,3 +17,4 @@ function bindAll(){
   $('viewModeBtn')?.addEventListener('click',()=>setEditMode(false)); $('editModeBtn')?.addEventListener('click',()=>setEditMode(true));
   setEditMode(false);
 }
+boot();
