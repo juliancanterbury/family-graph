@@ -129,6 +129,19 @@ Exceptions to the gating rule:
   the "must be linked to invite" rule only applies to actual invited users,
   not every person added to the tree.
 
+## Invite via email, tied to an existing face (deferred — needs recognition first)
+A person who exists in the tree only as a tagged face (no account) can be
+invited by email by anyone in the family — the invite is tied to their
+specific person record, not a blank slate. On accepting, their account
+auto-links to that person record (no manual "which person are you" step
+needed). They then pick their own hero photo, and face recognition checks it
+against their existing tagged faces before accepting it — so identity can't
+be claimed falsely. From there they have ownership over their own record.
+This makes growth organic ("I recognize this face, I'll invite them") rather
+than blank email invites. Depends on face recognition actually working first
+(faceprint storage exists in the database now, but matching logic isn't built
+yet) — so this waits until after interface coherence work and recognition.
+
 ## Duplicate people (e.g. "Robert Canterbury" / "Rob Canterbury")
 Two layers needed:
 1. Prevention — fuzzy name matching plus a small nickname dictionary
