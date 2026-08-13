@@ -26,8 +26,15 @@ export function photoTitle(ph){return ph?.title||ph?.original_filename||'Photo'}
 export function faceForPerson(id){return S.faces.find(f=>f.person_id===id)}
 export async function cropStyle(f,size=92){
   if(!f)return''; const ph=S.photos.find(p=>p.id===f.photo_id); if(!ph)return''; const { publicUrl } = await import('./api.js'); const url=await publicUrl(ph);
-  const w=Math.max(1,+f.w||1), h=Math.max(1,+f.h||1), x=+f.x||0, y=+f.y||0; const img=$('mainPhoto'); const displayW=(img&&img.complete&&img.naturalWidth)?img.clientWidth||1200:1200; const scale=size/Math.max(w,h);
-  return `background-image:url('${url}');background-size:${displayW*scale}px auto;background-position:${-(x*scale)+(size-w*scale)/2}px ${-(y*scale)+(size-h*scale)/2}px;background-repeat:no-repeat;`;
+  const legacy=(+f.x||0)>1.5||(+f.y||0)>1.5||(+f.w||0)>1.5||(+f.h||0)>1.5;
+  if(legacy){
+    const w=Math.max(1,+f.w||1), h=Math.max(1,+f.h||1), x=+f.x||0, y=+f.y||0, displayW=1200, scale=size/Math.max(w,h);
+    return `background-image:url('${url}');background-size:${displayW*scale}px auto;background-position:${-(x*scale)+(size-w*scale)/2}px ${-(y*scale)+(size-h*scale)/2}px;background-repeat:no-repeat;`;
+  }
+  const nw=ph.width||1200, nh=ph.height||1200;
+  const fw=Math.max(.02,+f.w||.1), fh=Math.max(.02,+f.h||.12), fx=+f.x||0, fy=+f.y||0;
+  const wPx=fw*nw, hPx=fh*nh, scale=size/Math.max(wPx,hPx), renderedW=nw*scale, xPx=fx*nw, yPx=fy*nh;
+  return `background-image:url('${url}');background-size:${renderedW}px auto;background-position:${-(xPx*scale)+(size-wPx*scale)/2}px ${-(yPx*scale)+(size-hPx*scale)/2}px;background-repeat:no-repeat;`;
 }
 export async function avatarHtml(p,cls='node-photo'){const f=faceForPerson(p.id); return f?`<div class="${cls}" style="${await cropStyle(f)}"></div>`:`<div class="${cls}">${esc(initial(p))}</div>`}
 export function personOptions(selected=''){return ['<option value="">Choose existing person…</option>'].concat(visiblePeople().sort((a,b)=>fullName(a).localeCompare(fullName(b))).map(p=>`<option value="${p.id}" ${p.id===selected?'selected':''}>${esc(fullName(p))}</option>`)).join('')}
