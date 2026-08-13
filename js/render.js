@@ -15,7 +15,13 @@ export async function renderPage(page){
   if(page==='admin') await renderAdmin();
   if(page==='review') renderReview();
 }
-function updateDashboard(){text('peopleTotal',S.people.length); text('photosTotal',S.photos.length); text('facesTotal',S.faces.length); text('relationshipsTotal',S.relationships.length)}
+function updateDashboard(){text('peopleTotal',S.people.length); text('photosTotal',S.photos.length); text('facesTotal',S.faces.length); text('relationshipsTotal',S.relationships.length); renderWhoAreYou()}
+function renderWhoAreYou(){
+  const card=$('whoAreYouCard'); if(!card)return;
+  if(S.profile?.person_id){card.classList.add('hidden'); return}
+  card.classList.remove('hidden');
+  html('whoAreYouSelect', personOptions(''));
+}
 export function photoTitle(ph){return ph?.title||ph?.original_filename||'Photo'}
 export function faceForPerson(id){return S.faces.find(f=>f.person_id===id)}
 export async function cropStyle(f,size=92){

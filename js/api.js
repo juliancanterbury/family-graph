@@ -15,6 +15,11 @@ export async function ensureProfile(){
   if(found.data) S.profile=found.data; else {const role=email.toLowerCase()==='julian.canterbury@gmail.com'?'owner':'contributor'; const ins=await S.sb.from('profiles').insert({user_id:u.id,email,display_name:email.split('@')[0],role}).select().single(); S.profile=ins.data||{email,role}}
   text('currentUser',email); text('currentRole',S.profile?.role||'contributor'); text('status',`Signed in as ${email} · ${S.profile?.role||'contributor'}`);
 }
+export async function setMyPerson(personId){
+  const u=S.session?.user; if(!u)return null;
+  const r=await S.sb.from('profiles').update({person_id:personId||null}).eq('user_id',u.id).select().single();
+  if(!r.error) S.profile=r.data; return S.profile;
+}
 async function optionalTable(name){try{const r=await S.sb.from(name).select('*').order('created_at',{ascending:false}); if(r.error)throw r.error; return r.data||[]}catch(e){try{return JSON.parse(localStorage.getItem('familyGraph:'+name)||'[]')}catch{return[]}}}
 export async function addOptional(name,row){row.id=row.id||uid(); row.created_at=row.created_at||new Date().toISOString(); try{const r=await S.sb.from(name).insert(row).select().single(); if(!r.error)return r.data}catch{} const key='familyGraph:'+name; const data=JSON.parse(localStorage.getItem(key)||'[]'); data.unshift(row); localStorage.setItem(key,JSON.stringify(data)); return row}
 export async function updateOptional(name,id,patch){try{const r=await S.sb.from(name).update(patch).eq('id',id).select().single(); if(!r.error)return r.data}catch{} return {...patch,id}}
