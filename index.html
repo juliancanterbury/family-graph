@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="css/tree.css">
   <link rel="stylesheet" href="css/admin.css">
   <link rel="stylesheet" href="css/dashboard.css">
+  <link rel="stylesheet" href="css/person.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/@vladmandic/human/dist/human.js"></script>
 </head>
@@ -169,6 +170,9 @@
         </aside>
       </section>
 
+      <!-- PERSON -->
+      <section id="personPage" class="page person-page hidden"></section>
+
       <!-- PEOPLE -->
       <section id="peoplePage" class="page people-page hidden">
         <div class="people-head"><h2>People</h2><button class="primary" id="addPersonBtn">Add person</button></div>
@@ -234,7 +238,8 @@
           <button id="zoomResetBtn">100%</button>
           <span id="zoomLabel" class="save-status">100%</span>
         </div>
-        <div class="tree-help-strip">Click a person to open their profile. Partner links never become parent/child links.</div>
+        <div class="tree-help-strip">Click a person to make them the centre of the tree. Partner links never become parent/child links.</div>
+        <div id="treeFocusChip" class="tree-focus-chip hidden"><span></span> · click to reset</div>
         <div class="theme-rail" id="themeRail">
           <button class="theme-chip" data-theme="ocean">01 Ocean</button>
           <button class="theme-chip" data-theme="forest">02 Forest</button>

@@ -8,12 +8,13 @@ import { bindRelationships } from './relationships.js';
 import { bindTree } from './tree.js';
 import { bindReview } from './review.js';
 import { bindAdmin } from './admin.js';
+import { bindPerson } from './person.js';
 export async function boot(){
   try{applyTheme(); hide('login');hide('app');hide('problem');show('loading'); bindAll(); await initSupabase(); await routeAuth(); await showPage(pageName());}
   catch(e){console.error(e); hide('loading');hide('login');hide('app');show('problem'); text('problemText',e.message)}
 }
 function bindAll(){
-  bindNavigation(); bindPhotos(); bindPeople(); bindRelationships(); bindTree(); bindReview(); bindAdmin();
+  bindNavigation(); bindPhotos(); bindPeople(); bindRelationships(); bindTree(); bindReview(); bindAdmin(); bindPerson();
   $('loginBtn')?.addEventListener('click',sendLogin); $('signOutBtn')?.addEventListener('click',signOut); $('refreshBtn')?.addEventListener('click',loadAll);
   $('viewModeBtn')?.addEventListener('click',()=>setEditMode(false)); $('editModeBtn')?.addEventListener('click',()=>setEditMode(true));
   $('scopeToggleBtn')?.addEventListener('click',toggleScope);
