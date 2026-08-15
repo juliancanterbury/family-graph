@@ -46,5 +46,8 @@ export async function cropStyle(f,size=92){
   const wPx=fw*nw, hPx=fh*nh, scale=size/Math.max(wPx,hPx), renderedW=nw*scale, xPx=fx*nw, yPx=fy*nh;
   return `background-image:url('${url}');background-size:${renderedW}px auto;background-position:${-(xPx*scale)+(size-wPx*scale)/2}px ${-(yPx*scale)+(size-hPx*scale)/2}px;background-repeat:no-repeat;`;
 }
-export async function avatarHtml(p,cls='node-photo'){const f=faceForPerson(p.id); return f?`<div class="${cls}" style="${await cropStyle(f)}"></div>`:`<div class="${cls}">${esc(initial(p))}</div>`}
+export async function avatarHtml(p,cls='node-photo'){
+  if(p.avatar_path){const bucketName=typeof FAMILY_MEDIA_BUCKET!=='undefined'?FAMILY_MEDIA_BUCKET:'family-media'; const url=S.sb.storage.from(bucketName).getPublicUrl(p.avatar_path).data.publicUrl; return `<div class="${cls}" style="background-image:url('${url}');background-size:cover;background-position:center;"></div>`}
+  const f=faceForPerson(p.id); return f?`<div class="${cls}" style="${await cropStyle(f)}"></div>`:`<div class="${cls}">${esc(initial(p))}</div>`
+}
 export function personOptions(selected=''){return ['<option value="">Choose existing person…</option>'].concat(visiblePeople().sort((a,b)=>fullName(a).localeCompare(fullName(b))).map(p=>`<option value="${p.id}" ${p.id===selected?'selected':''}>${esc(fullName(p))}</option>`)).join('')}

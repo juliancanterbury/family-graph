@@ -1,7 +1,8 @@
-import { S, $, esc, fullName, person as personById, visiblePeople } from './state.js';
+import { S, $, esc, fullName, person as personById, visiblePeople, canEdit } from './state.js';
 import { avatarHtml } from './render.js';
 import { publicUrl } from './api.js';
 import { createRelationship, deleteRelationship } from './relationships.js';
+import { invitePerson } from './api.js';
 
 let selectedTrayId=null;
 
@@ -26,6 +27,10 @@ async function trayHtml(excludeIds){
   return rows.join('')||'<p class="small">No one else in view to link — try "Show everyone" in the header.</p>';
 }
 
+function readOnlyRow(label,people){
+  if(!people.length)return'';
+  return `<div class="person-rel-row"><span class="person-rel-label">${esc(label)}</span><div class="person-rel-list">${people.map(p=>`<button class="person-chip" data-person-id="${p.id}">${esc(fullName(p))}</button>`).join('')}</div></div>`;
+}
 export async function renderPersonPage(id){
   const root=$('personPage'); if(!root)return;
   const p=personById(id);
@@ -34,25 +39,46 @@ export async function renderPersonPage(id){
   const excludeIds=new Set([id,...parents.map(x=>x.p.id),...partners.map(x=>x.p.id),...children.map(x=>x.p.id)]);
   const galleryHtml=(await Promise.all(photos.map(async ph=>{const url=await publicUrl(ph); return `<button class="person-photo-thumb" data-open-photo="${ph.id}"><img src="${url}" alt=""></button>`}))).join('');
 
-  root.innerHTML=`
-    <button data-page="dashboard" class="back-link">← Back</button>
-    <div class="person-hero">
-      ${await avatarHtml(p,'person-hero-photo')}
-      <div>
-        <h2>${esc(fullName(p))}</h2>
-        <p class="small">${esc(p.birth_date||'Birth date unknown')}${p.death_date?' – '+esc(p.death_date):(p.living===false?' – deceased':'')}</p>
-      </div>
-    </div>
-
+  const relSection = S.editMode ? `
     <div class="rel-builder" data-focus="${id}">
       <div class="rel-zone" data-zone="parent"><div class="zone-label">Parent</div><div class="zone-chips">${parents.map(x=>zoneChip(x.relId,x.p)).join('')||'<span class="zone-empty">drop here</span>'}</div></div>
       <div class="rel-builder-center">${await avatarHtml(p,'rel-center-photo')}<strong>${esc(fullName(p))}</strong></div>
       <div class="rel-zone" data-zone="partner"><div class="zone-label">Partner</div><div class="zone-chips">${partners.map(x=>zoneChip(x.relId,x.p)).join('')||'<span class="zone-empty">drop here</span>'}</div></div>
       <div class="rel-zone" data-zone="child"><div class="zone-label">Child</div><div class="zone-chips">${children.map(x=>zoneChip(x.relId,x.p)).join('')||'<span class="zone-empty">drop here</span>'}</div></div>
     </div>
-    <p class="small rel-builder-hint">Drag someone onto Parent / Partner / Child. On touch: tap a person below, then tap a zone.</p>
+    <p class="small rel-builder-hint">Drag someone onto Parent / Partner / Child. On touch: tap a person below, then tap a zone. Click a chip's ✕ to remove it.</p>
     <div class="rel-tray" id="relTray">${await trayHtml(excludeIds)}</div>
+  ` : `
+    <div class="person-rel-grid">
+      ${readOnlyRow('Parents',parents.map(x=>x.p))}
+      ${readOnlyRow('Partner',partners.map(x=>x.p))}
+      ${readOnlyRow('Children',children.map(x=>x.p))}
+    </div>
+    <p class="small rel-builder-hint">Switch to Edit mode (top of page) to add or change relationships. Tap any name to go to their page.</p>
+  `;
 
+  const isMe = S.profile?.person_id===id;
+  const inviteHtml = canEdit() ? (
+    isMe ? '<p class="small invite-status">This is you.</p>'
+    : p.invite_email ? `<p class="small invite-status">Invited: ${esc(p.invite_email)} — waiting for them to sign in.</p>`
+    : `<div class="invite-row"><input id="inviteEmailInput" type="email" placeholder="Their email address"><button id="inviteSendBtn" data-invite-person="${id}">Invite by email</button></div>`
+  ) : '';
+  const avatarBtnHtml = (isMe||canEdit()) ? `<button class="small-btn avatar-set-btn" data-set-avatar="${id}">${isMe?'Set my photo':'Set their photo'}</button>` : '';
+
+  root.innerHTML=`
+    <button data-page="dashboard" class="back-link">← Back</button>
+    <div class="person-mode-toggle"><button id="personViewModeBtn" class="${S.editMode?'':'primary'}">View mode</button><button id="personEditModeBtn" class="${S.editMode?'primary':''}">Edit mode</button></div>
+    <div class="person-hero">
+      ${await avatarHtml(p,'person-hero-photo')}
+      <div>
+        <h2>${esc(fullName(p))}</h2>
+        <p class="small">${esc(p.birth_date||'Birth date unknown')}${p.death_date?' – '+esc(p.death_date):(p.living===false?' – deceased':'')}</p>
+        ${avatarBtnHtml}
+        ${inviteHtml}
+      </div>
+    </div>
+
+    ${relSection}
     ${siblings.length?`<div class="person-rel-row siblings-row"><span class="person-rel-label">Siblings</span><div class="person-rel-list">${siblings.map(s=>`<button class="person-chip" data-person-id="${s.id}">${esc(fullName(s))}</button>`).join('')}</div><span class="small">(derived from shared parents)</span></div>`:''}
 
     <h3>Photos (${photos.length})</h3>
@@ -72,6 +98,12 @@ async function link(zone,focusId,otherId){
 
 export function bindPerson(){
   document.body.addEventListener('click',async e=>{
+    const modeBtn=e.target.closest('#personViewModeBtn,#personEditModeBtn');
+    if(modeBtn){e.preventDefault(); const {setEditMode}=await import('./navigation.js'); setEditMode(modeBtn.id==='personEditModeBtn'); return}
+
+    const inviteBtn=e.target.closest('[data-invite-person]');
+    if(inviteBtn){e.preventDefault(); const email=$('inviteEmailInput')?.value; const res=await invitePerson(inviteBtn.dataset.invitePerson,email); if(res.error){alert(res.error);return} await renderPersonPage(inviteBtn.dataset.invitePerson); return}
+
     const openPhoto=e.target.closest('[data-open-photo]');
     if(openPhoto){e.preventDefault(); const [{showPage},{selectPhoto}]=await Promise.all([import('./navigation.js'),import('./photos.js')]); await showPage('photo'); await selectPhoto(openPhoto.dataset.openPhoto); return}
 
