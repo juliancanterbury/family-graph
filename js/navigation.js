@@ -17,9 +17,10 @@ export async function showPerson(id){
   $('personPage')?.classList.remove('hidden');
   document.querySelectorAll('nav button[data-page]').forEach(b=>b.classList.remove('primary'));
   const target='#person/'+id; if(location.hash!==target) history.pushState(null,'',target);
+  S.currentPersonId=id;
   await renderPersonPage(id);
 }
-export function setEditMode(on){S.editMode=!!on; setClasses(); $('viewModeBtn')?.classList.toggle('primary',!S.editMode); $('editModeBtn')?.classList.toggle('primary',S.editMode)}
+export function setEditMode(on){S.editMode=!!on; setClasses(); $('viewModeBtn')?.classList.toggle('primary',!S.editMode); $('editModeBtn')?.classList.toggle('primary',S.editMode); if(S.currentPersonId&&!$('personPage')?.classList.contains('hidden')){import('./person.js').then(m=>m.renderPersonPage(S.currentPersonId))}}
 export function bindNavigation(){
   document.body.addEventListener('click',e=>{
     const person=e.target.closest('[data-person-id]'); if(person && !e.target.closest('[data-no-nav]')){e.preventDefault(); showPerson(person.dataset.personId); return}

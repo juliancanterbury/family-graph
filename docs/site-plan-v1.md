@@ -129,18 +129,25 @@ Exceptions to the gating rule:
   the "must be linked to invite" rule only applies to actual invited users,
   not every person added to the tree.
 
-## Invite via email, tied to an existing face (deferred — needs recognition first)
-A person who exists in the tree only as a tagged face (no account) can be
-invited by email by anyone in the family — the invite is tied to their
-specific person record, not a blank slate. On accepting, their account
-auto-links to that person record (no manual "which person are you" step
-needed). They then pick their own hero photo, and face recognition checks it
-against their existing tagged faces before accepting it — so identity can't
-be claimed falsely. From there they have ownership over their own record.
-This makes growth organic ("I recognize this face, I'll invite them") rather
-than blank email invites. Depends on face recognition actually working first
-(faceprint storage exists in the database now, but matching logic isn't built
-yet) — so this waits until after interface coherence work and recognition.
+## Invite via email, tied to an existing face — simplified version now built
+The full version (with face-recognition identity confirmation on their new
+photo) is still deferred. A simpler version is built: from a person's page
+(Edit mode, owner/editor only), enter their email to invite them. When they
+first sign in with that email, their account auto-links to that person
+record — no manual "which person are you" step, and their Tree view defaults
+to centering on themselves. This directly supports "no one starts without
+being linked to someone real," without yet hard-blocking open sign-up (which
+remains fine while it's just family testing, per your call).
+
+## Own-photo avatars (built)
+Anyone (for themselves) or an owner/editor (on someone's behalf, useful for
+relatives who don't have accounts yet) can set a dedicated portrait via a
+passport-photo-style capture: take/upload a selfie, drag an eye-line and a
+chin-line onto the actual eyes and chin, confirm. The app computes a
+consistently-framed circular crop from those two reference points. This
+avatar takes priority over any face crop pulled from a group photo — directly
+solves old/low-quality auto-crops, and lets people control how they're
+represented without needing to touch the identify-faces workflow at all.
 
 ## Duplicate people (e.g. "Robert Canterbury" / "Rob Canterbury")
 Two layers needed:

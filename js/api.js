@@ -12,13 +12,35 @@ export async function sendLogin(){const email=$('emailInput')?.value.trim(); if(
 export async function signOut(){await S.sb.auth.signOut()}
 export async function ensureProfile(){
   const u=S.session.user, email=u.email||''; const found=await S.sb.from('profiles').select('*').eq('user_id',u.id).maybeSingle();
-  if(found.data) S.profile=found.data; else {const role=email.toLowerCase()==='julian.canterbury@gmail.com'?'owner':'contributor'; const ins=await S.sb.from('profiles').insert({user_id:u.id,email,display_name:email.split('@')[0],role}).select().single(); S.profile=ins.data||{email,role}}
+  if(found.data) S.profile=found.data; else {
+    const role=email.toLowerCase()==='julian.canterbury@gmail.com'?'owner':'contributor';
+    const ins=await S.sb.from('profiles').insert({user_id:u.id,email,display_name:email.split('@')[0],role}).select().single();
+    S.profile=ins.data||{email,role};
+    // First sign-in: if someone already invited this email to a specific person, link automatically.
+    if(S.profile && !S.profile.person_id){
+      const match=await S.sb.from('people').select('id').ilike('invite_email',email).limit(1).maybeSingle();
+      if(match.data?.id){
+        const link=await S.sb.from('profiles').update({person_id:match.data.id}).eq('user_id',u.id).select().single();
+        if(link.data) S.profile=link.data;
+        S.treeFocusId=match.data.id;
+      }
+    }
+  }
+  if(S.profile?.person_id && !S.treeFocusId) S.treeFocusId=S.profile.person_id;
   text('currentUser',email); text('currentRole',S.profile?.role||'contributor'); text('status',`Signed in as ${email} · ${S.profile?.role||'contributor'}`);
 }
 export async function setMyPerson(personId){
   const u=S.session?.user; if(!u)return null;
   const r=await S.sb.from('profiles').update({person_id:personId||null}).eq('user_id',u.id).select().single();
-  if(!r.error) S.profile=r.data; return S.profile;
+  if(!r.error){S.profile=r.data; S.treeFocusId=personId||null}
+  return S.profile;
+}
+export async function invitePerson(personId,email){
+  email=(email||'').trim().toLowerCase(); if(!email)return{error:'Enter an email address.'};
+  const r=await S.sb.from('people').update({invite_email:email}).eq('id',personId).select().single();
+  if(r.error)return{error:r.error.message};
+  const idx=S.people.findIndex(p=>p.id===personId); if(idx>-1)S.people[idx]=r.data;
+  return{data:r.data};
 }
 async function optionalTable(name){try{const r=await S.sb.from(name).select('*').order('created_at',{ascending:false}); if(r.error)throw r.error; return r.data||[]}catch(e){try{return JSON.parse(localStorage.getItem('familyGraph:'+name)||'[]')}catch{return[]}}}
 export async function addOptional(name,row){row.id=row.id||uid(); row.created_at=row.created_at||new Date().toISOString(); try{const r=await S.sb.from(name).insert(row).select().single(); if(!r.error)return r.data}catch{} const key='familyGraph:'+name; const data=JSON.parse(localStorage.getItem(key)||'[]'); data.unshift(row); localStorage.setItem(key,JSON.stringify(data)); return row}

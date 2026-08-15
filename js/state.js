@@ -4,7 +4,7 @@ export const S = {
   currentPhoto:null, selectedFaceId:null, currentRel:'mother', graphScale:1,
   showBoxes:true, showNames:true, editMode:false, dbTab:'people', dbSelected:null,
   theme:localStorage.getItem('familyGraphTheme') || 'ocean', human:null, humanPromise:null,
-  showEveryone:localStorage.getItem('familyGraphShowEveryone')==='1', treeFocusId:null
+  showEveryone:localStorage.getItem('familyGraphShowEveryone')==='1', treeFocusId:null, currentPersonId:null
 };
 export const REDIRECT_URL='https://juliancanterbury.github.io/family-graph/';
 export const $=id=>document.getElementById(id);
@@ -15,6 +15,24 @@ export const html=(id,v)=>{const e=$(id); if(e)e.innerHTML=v??''};
 export const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 export const uid=()=>crypto.randomUUID();
 export const titleCaseName=v=>String(v||'').trim().replace(/\s+/g,' ').split(' ').map(part=>part.split('-').map(p=>p?p[0].toUpperCase()+p.slice(1).toLowerCase():p).join('-')).join(' ');
+
+// --- Duplicate-person prevention ---
+const NICKNAMES={rob:'robert',bob:'robert',bobby:'robert',bill:'william',billy:'william',liz:'elizabeth',beth:'elizabeth',betty:'elizabeth',jim:'james',jimmy:'james',mike:'michael',tom:'thomas',tommy:'thomas',dave:'david',chris:'christopher',andy:'andrew',nick:'nicholas',sam:'samuel',ben:'benjamin',ed:'edward',eddie:'edward',joe:'joseph',joey:'joseph',kate:'katherine',katie:'katherine',sue:'susan',susie:'susan',meg:'margaret',peggy:'margaret',jack:'john',dick:'richard',fred:'frederick',rachael:'rachel'};
+const normalizeGiven=w=>{w=(w||'').toLowerCase(); return NICKNAMES[w]||w};
+function levenshtein(a,b){const m=a.length,n=b.length,d=[]; for(let i=0;i<=m;i++)d[i]=[i]; for(let j=0;j<=n;j++)d[0][j]=j; for(let i=1;i<=m;i++)for(let j=1;j<=n;j++)d[i][j]=a[i-1]===b[j-1]?d[i-1][j-1]:1+Math.min(d[i-1][j-1],d[i-1][j],d[i][j-1]); return d[m][n]}
+export function findSimilarPerson(name){
+  const target=String(name||'').toLowerCase().trim(); if(!target)return null;
+  const parts=target.split(/\s+/), givenNorm=normalizeGiven(parts[0]), surname=parts.slice(1).join(' ');
+  let best=null,bestScore=Infinity;
+  for(const p of S.people){
+    const pn=fullName(p).toLowerCase().trim(); if(!pn)continue;
+    if(pn===target)return {person:p,exact:true};
+    const pparts=pn.split(/\s+/), pSurname=pparts.slice(1).join(' ');
+    let score = (surname&&pSurname&&surname===pSurname&&givenNorm===normalizeGiven(pparts[0])) ? 0 : levenshtein(target,pn);
+    if(score<bestScore){bestScore=score;best=p}
+  }
+  return (best&&bestScore<=2) ? {person:best,exact:false} : null;
+}
 export const fullName=p=>p?.display_name || [p?.given_names,p?.family_name].filter(Boolean).join(' ') || 'Unknown';
 export const person=id=>S.people.find(p=>p.id===id);
 export const initial=p=>fullName(p).split(' ').filter(Boolean).map(x=>x[0]).join('').slice(0,2).toUpperCase()||'?';
