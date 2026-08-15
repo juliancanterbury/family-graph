@@ -1,4 +1,4 @@
-import { S, $, esc, fullName, person as personById, visiblePeople, canEdit } from './state.js';
+import { S, $, esc, fullName, person as personById, visiblePeople, canEdit, REDIRECT_URL } from './state.js';
 import { avatarHtml } from './render.js';
 import { publicUrl } from './api.js';
 import { createRelationship, deleteRelationship } from './relationships.js';
@@ -20,6 +20,42 @@ export function personPhotos(id){
   return photoIds.map(pid=>S.photos.find(ph=>ph.id===pid)).filter(Boolean);
 }
 function zoneChip(relId,p){return `<span class="zone-chip" data-remove-rel="${relId}" title="Click to remove">${esc(fullName(p))} ✕</span>`}
+
+function inviteMessageText(p,email){
+  const ownerName=S.profile?.display_name||S.profile?.email?.split('@')[0]||'A family member';
+  const given=(p.given_names||fullName(p).split(' ')[0]||'there');
+  return `Hi ${given},
+
+${ownerName} has invited you to Family Graph — our private family photo archive and family tree.
+
+To join:
+1. Go to ${REDIRECT_URL}
+2. Sign in using this email address: ${email}
+3. You'll get a secure sign-in link by email (no password needed) — just click it.
+
+Once you're in, you'll land straight on your own page, already connected to the family tree.
+
+— ${ownerName}`;
+}
+function showInviteMessage(p,email){
+  const ov=$('avatarCaptureOverlay'); if(!ov)return;
+  const msg=inviteMessageText(p,email);
+  ov.classList.remove('hidden');
+  ov.innerHTML=`
+    <div class="avatar-capture-box invite-message-box">
+      <h2>Invite ${esc(fullName(p))}</h2>
+      <p class="small">Copy this, or open it directly in your email app, then send it to ${esc(email)} yourself.</p>
+      <textarea id="inviteMessageText" readonly rows="10">${esc(msg)}</textarea>
+      <div class="avatar-align-actions">
+        <button id="inviteMsgCloseBtn">Close</button>
+        <button id="inviteMsgCopyBtn">Copy text</button>
+        <a class="primary button-link" id="inviteMsgMailtoBtn" href="mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent('Join our Family Graph')}&body=${encodeURIComponent(msg)}">Open in email</a>
+      </div>
+    </div>`;
+  $('inviteMsgCloseBtn')?.addEventListener('click',()=>{ov.classList.add('hidden');ov.innerHTML=''});
+  $('inviteMsgCopyBtn')?.addEventListener('click',async e=>{try{await navigator.clipboard.writeText(msg); e.target.textContent='Copied!'; setTimeout(()=>e.target.textContent='Copy text',1500)}catch{alert('Could not copy automatically — select the text and copy manually.')}});
+  ov.addEventListener('click',e=>{if(e.target===ov){ov.classList.add('hidden');ov.innerHTML=''}});
+}
 
 async function trayHtml(excludeIds){
   const people=visiblePeople().filter(p=>!excludeIds.has(p.id));
@@ -102,7 +138,7 @@ export function bindPerson(){
     if(modeBtn){e.preventDefault(); const {setEditMode}=await import('./navigation.js'); setEditMode(modeBtn.id==='personEditModeBtn'); return}
 
     const inviteBtn=e.target.closest('[data-invite-person]');
-    if(inviteBtn){e.preventDefault(); const email=$('inviteEmailInput')?.value; const res=await invitePerson(inviteBtn.dataset.invitePerson,email); if(res.error){alert(res.error);return} await renderPersonPage(inviteBtn.dataset.invitePerson); return}
+    if(inviteBtn){e.preventDefault(); const email=($('inviteEmailInput')?.value||'').trim(); if(!email)return alert('Enter an email address first.'); const targetId=inviteBtn.dataset.invitePerson; const res=await invitePerson(targetId,email); if(res.error){alert(res.error);return} showInviteMessage(res.data,email); renderPersonPage(targetId); return}
 
     const openPhoto=e.target.closest('[data-open-photo]');
     if(openPhoto){e.preventDefault(); const [{showPage},{selectPhoto}]=await Promise.all([import('./navigation.js'),import('./photos.js')]); await showPage('photo'); await selectPhoto(openPhoto.dataset.openPhoto); return}

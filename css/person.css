@@ -18,3 +18,5 @@
 .avatar-guide span{position:absolute;right:0;top:-20px;font-size:11px;background:#000;padding:2px 6px;border-radius:4px;white-space:nowrap}
 .avatar-guide::before{content:'';position:absolute;left:0;right:0;top:-14px;height:28px}
 .avatar-align-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:14px}
+.invite-message-box textarea{width:100%;background:#0c0c0c;border:1px solid #333;border-radius:8px;color:inherit;padding:10px;font-family:inherit;font-size:13px;resize:vertical;margin-top:10px}
+.button-link{display:inline-flex;align-items:center;justify-content:center;padding:8px 16px;border-radius:8px;text-decoration:none;cursor:pointer}
