@@ -138,21 +138,7 @@
         </div>
         <aside class="side">
           <div class="card"><h2>Selected face</h2><div id="faceEditor"><p>Select or add a face box.</p></div></div>
-          <div class="card">
-            <h2>Add relationship</h2>
-            <div class="row"><label>Person</label><select id="relA"></select></div>
-            <div class="relationship-buttons" id="relButtons">
-              <button data-rel="mother">Mother of</button>
-              <button data-rel="father">Father of</button>
-              <button data-rel="parent">Parent of</button>
-              <button data-rel="partner">Partner of</button>
-              <button data-rel="child">Child of</button>
-              <button data-rel="sibling">Sibling of</button>
-            </div>
-            <div class="row"><label>Other</label><select id="relB"></select></div>
-            <div id="relationshipWarning" class="warning hidden"></div>
-            <button class="primary full" id="saveRelBtn">Save relationship</button>
-          </div>
+          <div class="card small"><p class="small">To connect this person to family members, name them above, then tap their name to open their profile — relationships are built there now.</p></div>
           <div class="card">
             <h2>Current photo</h2>
             <p><strong id="faceCount">0</strong> face boxes</p>
@@ -175,7 +161,7 @@
 
       <!-- PEOPLE -->
       <section id="peoplePage" class="page people-page hidden">
-        <div class="people-head"><h2>People</h2><button class="primary" id="addPersonBtn">Add person</button></div>
+        <div class="people-head"><h2>People</h2><button id="peopleSortBtn">Sort: First name</button><button class="primary" id="addPersonBtn">Add person</button></div>
         <div id="peopleList" class="people-list"></div>
       </section>
 

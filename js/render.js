@@ -24,6 +24,16 @@ function renderWhoAreYou(){
 }
 export function photoTitle(ph){return ph?.title||ph?.original_filename||'Photo'}
 export function faceForPerson(id){return S.faces.find(f=>f.person_id===id)}
+const dimCache=new Map();
+async function ensureDims(ph){
+  if(ph.width&&ph.height)return {w:ph.width,h:ph.height};
+  if(dimCache.has(ph.id))return dimCache.get(ph.id);
+  const { publicUrl } = await import('./api.js'); const url=await publicUrl(ph);
+  const dims=await new Promise(res=>{const img=new Image(); img.onload=()=>res({w:img.naturalWidth,h:img.naturalHeight}); img.onerror=()=>res({w:1200,h:1200}); img.src=url});
+  dimCache.set(ph.id,dims);
+  S.sb.from('photos').update({width:dims.w,height:dims.h}).eq('id',ph.id).then(()=>{ph.width=dims.w;ph.height=dims.h});
+  return dims;
+}
 export async function cropStyle(f,size=92){
   if(!f)return''; const ph=S.photos.find(p=>p.id===f.photo_id); if(!ph)return''; const { publicUrl } = await import('./api.js'); const url=await publicUrl(ph);
   const legacy=(+f.x||0)>1.5||(+f.y||0)>1.5||(+f.w||0)>1.5||(+f.h||0)>1.5;
@@ -31,7 +41,7 @@ export async function cropStyle(f,size=92){
     const w=Math.max(1,+f.w||1), h=Math.max(1,+f.h||1), x=+f.x||0, y=+f.y||0, displayW=1200, scale=size/Math.max(w,h);
     return `background-image:url('${url}');background-size:${displayW*scale}px auto;background-position:${-(x*scale)+(size-w*scale)/2}px ${-(y*scale)+(size-h*scale)/2}px;background-repeat:no-repeat;`;
   }
-  const nw=ph.width||1200, nh=ph.height||1200;
+  const dims=await ensureDims(ph); const nw=dims.w||1200, nh=dims.h||1200;
   const fw=Math.max(.02,+f.w||.1), fh=Math.max(.02,+f.h||.12), fx=+f.x||0, fy=+f.y||0;
   const wPx=fw*nw, hPx=fh*nh, scale=size/Math.max(wPx,hPx), renderedW=nw*scale, xPx=fx*nw, yPx=fy*nh;
   return `background-image:url('${url}');background-size:${renderedW}px auto;background-position:${-(xPx*scale)+(size-wPx*scale)/2}px ${-(yPx*scale)+(size-hPx*scale)/2}px;background-repeat:no-repeat;`;
