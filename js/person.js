@@ -49,7 +49,8 @@ function showInviteMessage(p,email){
       <div class="avatar-align-actions">
         <button id="inviteMsgCloseBtn">Close</button>
         <button id="inviteMsgCopyBtn">Copy text</button>
-        <a class="primary button-link" id="inviteMsgMailtoBtn" href="mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent('Join our Family Graph')}&body=${encodeURIComponent(msg)}">Open in email</a>
+        <a class="button-link" id="inviteMsgMailtoBtn" href="mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent('Join our Family Graph')}&body=${encodeURIComponent(msg)}">Open in email app</a>
+        <a class="primary button-link" id="inviteMsgGmailBtn" target="_blank" rel="noopener" href="https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}&su=${encodeURIComponent('Join our Family Graph')}&body=${encodeURIComponent(msg)}">Open in Gmail</a>
       </div>
     </div>`;
   $('inviteMsgCloseBtn')?.addEventListener('click',()=>{ov.classList.add('hidden');ov.innerHTML=''});
