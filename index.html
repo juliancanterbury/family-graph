@@ -79,11 +79,14 @@
             <p class="small">Upload one family photo — it doesn't need to be a great shot, the more people in it the better. We'll find the faces automatically so you can start naming people.</p>
           </div>
           <div class="dashboard-upload">
-            <label class="button primary big-upload" for="dashboardPhotoInput">
-              <span class="upload-icon">📷</span>
-              <span>Upload a family photo</span>
-              <input id="dashboardPhotoInput" type="file" accept="image/*" hidden>
-            </label>
+            <div class="drop-zone big-drop-zone" id="dashboardDropZone">
+              <label class="button primary big-upload" for="dashboardPhotoInput">
+                <span class="upload-icon">📷</span>
+                <span>Upload a family photo</span>
+                <input id="dashboardPhotoInput" type="file" accept="image/*" hidden>
+              </label>
+              <p class="small">or drag and drop a photo here</p>
+            </div>
             <p class="small">JPG or PNG. One photo is enough to get going.</p>
           </div>
         </div>
@@ -133,7 +136,7 @@
           <div class="photo-scroll">
             <div class="photo-canvas" id="photoCanvas">
               <img id="mainPhoto" src="" alt="" crossorigin="anonymous">
-              <div id="emptyPhoto" class="empty-photo">Upload a photo to begin.</div>
+              <div id="emptyPhoto" class="empty-photo drop-zone">Upload a photo to begin — or drag and drop one here.</div>
             </div>
           </div>
         </div>
