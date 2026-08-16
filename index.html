@@ -118,6 +118,7 @@
             <button id="viewModeBtn">View mode</button>
             <button id="editModeBtn">Edit mode</button>
             <label class="button primary">Upload photo<input id="photoInput" type="file" accept="image/*" hidden></label>
+            <label class="owner-only private-toggle small"><input id="privatePhotoToggle" type="checkbox"> Private (only me)</label>
             <button id="latestPhotoBtn">Latest photo</button>
             <button id="prevPhotoBtn">← Prev</button>
             <button id="nextPhotoBtn">Next →</button>
@@ -126,7 +127,7 @@
             <button id="suggestFaceBtn">Suggest face/name</button>
             <button id="toggleBoxesBtn">Hide boxes</button>
             <button id="toggleNamesBtn">Hide names</button>
-            <button class="owner-only edit-only danger" id="deleteFaceBtn">Delete selected</button>
+            <button class="edit-only danger" id="deleteFaceBtn">Delete selected</button>
             <span id="saveStatus" class="save-status">Ready</span>
           </div>
           <div class="photo-scroll">

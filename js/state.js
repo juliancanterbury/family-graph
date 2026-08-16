@@ -72,9 +72,11 @@ export function inScope(p){
 export function visible(p){return isRealPerson(p)&&inScope(p)}
 export const visiblePeople=()=>S.people.filter(visible);
 export function visiblePhotos(){
-  if(S.showEveryone||!S.profile?.person_id)return S.photos;
-  const mine=myFamilyIds(); const me=S.session?.user?.id;
-  return S.photos.filter(ph=>{
+  const me=S.session?.user?.id;
+  const base=S.photos.filter(ph=>!ph.private||ph.uploaded_by===me||canDelete());
+  if(S.showEveryone||!S.profile?.person_id)return base;
+  const mine=myFamilyIds();
+  return base.filter(ph=>{
     if(ph.uploaded_by&&ph.uploaded_by===me)return true;
     return S.faces.some(f=>f.photo_id===ph.id&&f.person_id&&mine.has(f.person_id));
   });
@@ -83,6 +85,9 @@ export const canDelete=()=>String(S.profile?.role||'viewer').toLowerCase()==='ow
 export const canEdit=()=>['owner','editor','family editor','contributor'].includes(String(S.profile?.role||'viewer').toLowerCase());
 export const userName=()=>S.profile?.display_name || S.session?.user?.email || 'Family member';
 export const userId=()=>S.session?.user?.id || 'local';
+// A face box can be moved/resized/directly renamed/deleted only by whoever created it, or by the owner.
+// Anyone with edit access can still add new boxes, and suggest corrections on boxes they didn't create.
+export const canEditFace=f=>canDelete()||(f&&f.created_by&&f.created_by===userId());
 export function status(t){text('saveStatus',t)}
 export function setClasses(){document.body.classList.toggle('can-edit',canEdit());document.body.classList.toggle('can-delete',canDelete());document.body.classList.toggle('edit-mode',S.editMode)}
 export function applyTheme(name=S.theme){S.theme=name;document.body.dataset.theme=name;localStorage.setItem('familyGraphTheme',name);document.querySelectorAll('.theme-chip').forEach(b=>b.classList.toggle('active',b.dataset.theme===name))}
