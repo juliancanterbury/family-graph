@@ -1,4 +1,4 @@
-import { S, $, esc, fullName, person as personById, visiblePeople, canEdit, REDIRECT_URL } from './state.js';
+import { S, $, esc, fullName, person as personById, visiblePeople, canEdit, canDelete, REDIRECT_URL } from './state.js';
 import { avatarHtml } from './render.js';
 import { publicUrl } from './api.js';
 import { createRelationship, deleteRelationship } from './relationships.js';
@@ -95,11 +95,12 @@ export async function renderPersonPage(id){
   `;
 
   const isMe = S.profile?.person_id===id;
-  const inviteHtml = canEdit() ? (
+  const canInvite = canDelete()||!!S.profile?.can_invite;
+  const inviteHtml = canInvite ? (
     isMe ? '<p class="small invite-status">This is you.</p>'
     : p.invite_email ? `<p class="small invite-status">Invited: ${esc(p.invite_email)} — waiting for them to sign in.</p>`
     : `<div class="invite-row"><input id="inviteEmailInput" type="email" placeholder="Their email address"><button id="inviteSendBtn" data-invite-person="${id}">Invite by email</button></div>`
-  ) : '';
+  ) : (isMe ? '<p class="small invite-status">This is you.</p>' : (p.invite_email ? `<p class="small invite-status">Invited — waiting for them to sign in.</p>` : ''));
   const avatarBtnHtml = (isMe||canEdit()) ? `<button class="small-btn avatar-set-btn" data-set-avatar="${id}">${isMe?'Set my photo':'Set their photo'}</button>` : '';
 
   root.innerHTML=`

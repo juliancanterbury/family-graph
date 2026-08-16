@@ -1,6 +1,6 @@
 export const S = {
   sb:null, session:null, profile:null,
-  people:[], photos:[], faces:[], relationships:[], suggestions:[], comments:[], feedback:[],
+  people:[], photos:[], faces:[], relationships:[], suggestions:[], comments:[], feedback:[], profiles:[],
   currentPhoto:null, selectedFaceId:null, currentRel:'mother', graphScale:1,
   showBoxes:true, showNames:true, editMode:false, dbTab:'people', dbSelected:null,
   theme:localStorage.getItem('familyGraphTheme') || 'ocean', human:null, humanPromise:null,
