@@ -15,7 +15,7 @@ export async function renderCurrentPhoto(){
   const img=$('mainPhoto'), empty=$('emptyPhoto'), c=$('photoCanvas'); if(!c)return;
   c.querySelectorAll('.face').forEach(x=>x.remove());
   if(empty) empty.style.display=S.currentPhoto?'none':'grid';
-  if(!S.currentPhoto)return;
+  if(!S.currentPhoto){if(img)img.removeAttribute('src'); return}
   if(img){img.src=await publicUrl(S.currentPhoto); try{await waitForImage(img)}catch(e){console.error(e)}}
   S.faces.filter(f=>f.photo_id===S.currentPhoto.id).forEach(f=>c.appendChild(faceEl(f)));
   c.classList.toggle('hide-boxes',!S.showBoxes); c.classList.toggle('hide-names',!S.showNames);

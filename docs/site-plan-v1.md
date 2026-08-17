@@ -149,6 +149,51 @@ avatar takes priority over any face crop pulled from a group photo — directly
 solves old/low-quality auto-crops, and lets people control how they're
 represented without needing to touch the identify-faces workflow at all.
 
+## Friends — separate but connected (future, not started)
+A friend is fundamentally not the same kind of connection as family — forcing
+them into the parent/partner/child model would corrupt the actual genealogy
+and break every tree/pedigree view, which are all specifically about blood
+and marriage lines. The data model already supports "separate" for free: a
+person doesn't need any family relationship to exist, have their own page, or
+be tagged in photos — they just wouldn't appear in the Tree. What "connected"
+would actually need: visibility based on who's tagged together in shared
+photos, independent of the family-graph scoping that currently drives "show
+my family only" — a friend has no family relationship, so they're invisible
+under today's scoping rule even if they're standing right next to you in a
+photo. That's the real design work whenever this gets picked up, not a
+different kind of relationship type.
+
+## Photo restoration — deblur / colorize old photos (future, needs new infrastructure)
+Genuinely possible, but different in kind from everything built so far: this
+needs an external AI service (colorization/deblurring models are too heavy to
+run client-side like face detection does), which means introducing the app's
+first real backend piece — a Supabase Edge Function to hold the API key
+securely, since a key can't safely live in browser-visible code. Plan: an
+opt-in "Enhance this photo" action that creates a new version alongside the
+original rather than replacing it (AI restoration can invent detail that
+wasn't there, so the real original should always stay available). Start with
+a free-tier provider (e.g. DeepAI) to prove it out before considering a paid
+tier for better quality.
+
+## Favorites — the "fun" layer, kept separate from the "accurate" layer
+Anyone can heart/favorite any photo they can see, purely as personal
+curation — doesn't touch who's tagged, doesn't move or duplicate the photo,
+doesn't need any permission. Two cousins can both favorite the same photo of
+a shared grandmother independently. This gives two natural views: "My
+Favorites" (a personal gallery across the whole archive, not just your own
+uploads or family branch) and "Family Favorites" (an aggregate of the
+most-loved photos — the living, fun, evolving part of the site). Important
+property: this never touches the people/relationships tables at all, so the
+fun layer can never corrupt the accurate birth/death/relationship data
+underneath — genuinely separate concerns, by design.
+
+## Multiple photo uploads at once (deferred until recognition exists)
+Batch-uploading many photos only actually saves time once faces can be
+auto-suggested — without recognition, each photo still needs a human to name
+every face individually, so uploading 20 at once just creates a backlog of
+20 photos needing identical manual attention, one at a time anyway. Revisit
+this once recognition is built; it becomes much more valuable then.
+
 ## Duplicate people (e.g. "Robert Canterbury" / "Rob Canterbury")
 Two layers needed:
 1. Prevention — fuzzy name matching plus a small nickname dictionary
