@@ -21,8 +21,18 @@ export async function showPerson(id){
   await renderPersonPage(id);
 }
 export function setEditMode(on){S.editMode=!!on; setClasses(); $('viewModeBtn')?.classList.toggle('primary',!S.editMode); $('editModeBtn')?.classList.toggle('primary',S.editMode); if(S.currentPersonId&&!$('personPage')?.classList.contains('hidden')){import('./person.js').then(m=>m.renderPersonPage(S.currentPersonId))}}
+export async function goBack(){
+  const rt=S.returnTo; S.returnTo=null;
+  if(rt?.page==='photo'){
+    await showPage('photo');
+    if(rt.photoId){const {selectPhoto}=await import('./photos.js'); await selectPhoto(rt.photoId)}
+    return;
+  }
+  await showPage('dashboard');
+}
 export function bindNavigation(){
   document.body.addEventListener('click',e=>{
+    const back=e.target.closest('[data-back]'); if(back){e.preventDefault(); goBack(); return}
     const person=e.target.closest('[data-person-id]'); if(person && !e.target.closest('[data-no-nav]')){e.preventDefault(); showPerson(person.dataset.personId); return}
     const btn=e.target.closest('[data-page]'); if(btn){e.preventDefault();showPage(btn.dataset.page)}
   });
@@ -31,5 +41,9 @@ export function bindNavigation(){
     if(h.startsWith('#person/')) showPerson(h.slice('#person/'.length));
     else showPage(pageName());
   });
-  document.addEventListener('keydown',e=>{if(e.key==='Escape'){S.selectedFaceId=null; renderPage('photo')}});
+  document.addEventListener('keydown',e=>{
+    if(e.key!=='Escape')return;
+    if(!$('personPage')?.classList.contains('hidden')){goBack(); return}
+    S.selectedFaceId=null; renderPage('photo');
+  });
 }

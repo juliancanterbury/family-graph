@@ -15,7 +15,8 @@ export async function renderCurrentPhoto(){
   const img=$('mainPhoto'), empty=$('emptyPhoto'), c=$('photoCanvas'); if(!c)return;
   c.querySelectorAll('.face').forEach(x=>x.remove());
   if(empty) empty.style.display=S.currentPhoto?'none':'grid';
-  if(!S.currentPhoto)return;
+  c.classList.toggle('empty-state',!S.currentPhoto);
+  if(!S.currentPhoto){if(img)img.removeAttribute('src'); return}
   if(img){img.src=await publicUrl(S.currentPhoto); try{await waitForImage(img)}catch(e){console.error(e)}}
   S.faces.filter(f=>f.photo_id===S.currentPhoto.id).forEach(f=>c.appendChild(faceEl(f)));
   c.classList.toggle('hide-boxes',!S.showBoxes); c.classList.toggle('hide-names',!S.showNames);
@@ -25,8 +26,31 @@ export async function renderCurrentPhoto(){
 function boxSize(){const img=$('mainPhoto'); return {dw:img?.clientWidth||1, dh:img?.clientHeight||1, nw:img?.naturalWidth||1, nh:img?.naturalHeight||1}}
 function isLegacyPx(f){return (+f.x||0)>1.5||(+f.y||0)>1.5||(+f.w||0)>1.5||(+f.h||0)>1.5}
 function toScreen(f){const {dw,dh}=boxSize(); if(isLegacyPx(f))return{left:+f.x||0,top:+f.y||0,width:+f.w||70,height:+f.h||90}; return{left:(+f.x||0)*dw,top:(+f.y||0)*dh,width:(+f.w||.1)*dw,height:(+f.h||.12)*dh}}
-function faceEl(f){const editable=canEditFace(f); const d=document.createElement('div'); d.className='face'+(f.person_id?' named':'')+(f.id===S.selectedFaceId?' selected':'')+(editable?'':' not-mine'); const s=toScreen(f); d.style.left=s.left+'px'; d.style.top=s.top+'px'; d.style.width=s.width+'px'; d.style.height=s.height+'px'; d.innerHTML=`<span>${esc(f.label||'')}</span>${editable?'<div class="handle"></div>':''}`; d.addEventListener('pointerdown',e=>startDrag(e,f.id,d)); d.querySelector('.handle')?.addEventListener('pointerdown',e=>startResize(e,f.id,d)); d.addEventListener('click',e=>{e.stopPropagation(); if(S.selectedFaceId===f.id)return; selectFace(f.id,d); renderFaceEditor()}); return d}
-export function repositionFaceBoxes(){renderCurrentPhoto()}
+function faceEl(f){const editable=canEditFace(f); const d=document.createElement('div'); d.className='face'+(f.person_id?' named':'')+(f.id===S.selectedFaceId?' selected':'')+(editable?'':' not-mine'); d.dataset.faceId=f.id; const s=toScreen(f); d.style.left=s.left+'px'; d.style.top=s.top+'px'; d.style.width=s.width+'px'; d.style.height=s.height+'px'; d.innerHTML=`<span>${esc(f.label||'')}</span>${editable?'<div class="handle"></div>':''}`; d.addEventListener('pointerdown',e=>startDrag(e,f.id,d)); d.querySelector('.handle')?.addEventListener('pointerdown',e=>startResize(e,f.id,d)); d.addEventListener('click',async e=>{
+  e.stopPropagation();
+  if(!S.editMode && f.person_id){const {showPerson}=await import('./navigation.js'); S.returnTo={page:'photo',photoId:S.currentPhoto?.id}; await showPerson(f.person_id); return}
+  if(S.selectedFaceId===f.id)return; selectFace(f.id,d); renderFaceEditor();
+}); return d}
+export function repositionFaceBoxes(){
+  const c=$('photoCanvas'); if(!c)return;
+  c.querySelectorAll('.face').forEach(el=>{
+    const f=S.faces.find(x=>x.id===el.dataset.faceId); if(!f)return;
+    const s=toScreen(f);
+    el.style.left=s.left+'px'; el.style.top=s.top+'px'; el.style.width=s.width+'px'; el.style.height=s.height+'px';
+  });
+}
+export function applyPhotoZoom(){
+  const img=$('mainPhoto'); if(!img)return;
+  if(S.photoZoom===1){img.style.width=''; S.photoBaseWidth=null}
+  else {
+    if(!S.photoBaseWidth) S.photoBaseWidth=img.getBoundingClientRect().width||img.clientWidth||720;
+    img.style.width=Math.round(S.photoBaseWidth*S.photoZoom)+'px';
+  }
+  const label=$('photoZoomLabel'); if(label)label.textContent=Math.round(S.photoZoom*100)+'%';
+  repositionFaceBoxes();
+}
+export function zoomPhoto(delta){S.photoZoom=Math.max(.3,Math.min(3,+(S.photoZoom+delta).toFixed(2))); applyPhotoZoom()}
+export function resetPhotoZoom(){S.photoZoom=1; applyPhotoZoom()}
 export function renderFaceEditor(){
   const w=$('faceEditor'); if(!w)return; const f=S.faces.find(x=>x.id===S.selectedFaceId);
   if(!f){w.innerHTML='<p>Select or add a face box.</p><button class="full" id="suggestFaceInline">Suggest a face/name</button>';return}
@@ -37,7 +61,7 @@ export function renderFaceEditor(){
 export function renderPhotoStats(){text('faceCount',S.currentPhoto?S.faces.filter(f=>f.photo_id===S.currentPhoto.id).length:0); text('namedCount',S.currentPhoto?S.faces.filter(f=>f.photo_id===S.currentPhoto.id&&f.person_id).length:0); text('toggleBoxesBtn',S.showBoxes?'Hide boxes':'Show boxes'); text('toggleNamesBtn',S.showNames?'Hide names':'Show names')}
 export function renderComments(){const box=$('photoComments'); if(!box)return; const rows=S.comments.filter(c=>c.photo_id===S.currentPhoto?.id).slice(0,20); box.innerHTML=rows.length?rows.map(c=>`<div class="comment"><b>${esc(c.author_name||c.created_by||'Family member')}</b><br>${esc(c.body||c.comment||'')}</div>`).join(''):'No comments yet.'}
 function fillRelationshipSelects(){const opts=visiblePeople().map(p=>`<option value="${p.id}">${esc(fullName(p))}</option>`).join(''); html('relA',opts); html('relB',opts)}
-export async function selectPhoto(id){const ph=S.photos.find(p=>p.id===id); if(!ph)return; S.currentPhoto=ph; S.selectedFaceId=null; await renderPhotoPage(); status('Photo loaded')}
+export async function selectPhoto(id){const ph=S.photos.find(p=>p.id===id); if(!ph)return; S.currentPhoto=ph; S.selectedFaceId=null; S.photoZoom=1; S.photoBaseWidth=null; await renderPhotoPage(); status('Photo loaded')}
 export async function uploadPhotoFile(file){
   if(!file)return; status('Uploading photo…'); const id=uid(), ext=(file.name.split('.').pop()||'jpg').toLowerCase(), path=`photos/${id}/original.${ext}`; const up=await S.sb.storage.from(bucket()).upload(path,file,{upsert:false}); if(up.error)return alert(up.error.message); const dims=await imageDims(file); const isPrivate=canDelete()&&!!$('privatePhotoToggle')?.checked; const ins=await S.sb.from('photos').insert({id,title:file.name,storage_path:path,original_filename:file.name,mime_type:file.type,width:dims.width,height:dims.height,uploaded_by:userId(),private:isPrivate}).select().single(); if(ins.error)return alert(ins.error.message); S.photos.unshift(ins.data); S.currentPhoto=ins.data; await renderPhotoPage(); status(isPrivate?'Private photo saved (only visible to you)':'Photo saved'); setTimeout(()=>detectFaces(true),350);
 }
@@ -74,8 +98,11 @@ function iou(a,b){const ax=a.x+a.w,ay=a.y+a.h,bx=b.x+b.w,by=b.y+b.h,ix=Math.max(
 async function detector(){if(S.humanPromise)return S.humanPromise; S.humanPromise=(async()=>{if(!window.Human)throw new Error('Face detector library did not load.'); S.human=new Human.Human({modelBasePath:'https://cdn.jsdelivr.net/npm/@vladmandic/human/models/',backend:'webgl',face:{enabled:true,detector:{enabled:true,rotation:true,maxDetected:100},mesh:{enabled:false},iris:{enabled:false},description:{enabled:false},emotion:{enabled:false}},body:{enabled:false},hand:{enabled:false},object:{enabled:false},gesture:{enabled:false}}); status('Loading face detector…'); await S.human.load(); await S.human.warmup(); return S.human})(); return S.humanPromise}
 export async function detectFaces(auto=false){try{if(!S.currentPhoto)return; const img=$('mainPhoto'); await waitForImage(img); const det=await detector(); status('Detecting faces…'); const r=await det.detect(img); const nw=img.naturalWidth||1, nh=img.naturalHeight||1; const found=(r.face||[]).map(fc=>{const b=fc.box||fc.boxRaw||[];return{x:(b[0]||0)/nw,y:(b[1]||0)/nh,w:(b[2]||0)/nw,h:(b[3]||0)/nh}}).filter(x=>x.w*nw>=24&&x.h*nh>=24); const exist=S.faces.filter(f=>f.photo_id===S.currentPhoto.id).map(f=>isLegacyPx(f)?{x:(+f.x||0)/((img.clientWidth||1)),y:(+f.y||0)/((img.clientHeight||1)),w:(+f.w||0)/((img.clientWidth||1)),h:(+f.h||0)/((img.clientHeight||1))}:{x:+f.x||0,y:+f.y||0,w:+f.w||0,h:+f.h||0}); const fresh=found.filter(x=>!exist.some(e=>iou(e,x)>.35)); if(!fresh.length){status(found.length?'Detected; all already boxed':'No faces detected'); if(!auto&&!found.length)alert('No faces detected. Use Add face box.'); return} const rows=fresh.map(x=>({...x,photo_id:S.currentPhoto.id,label:null,status:'detected',created_by:userId()})); const ins=await S.sb.from('faces').insert(rows).select(); if(ins.error)return alert(ins.error.message); S.faces.push(...ins.data); await renderPhotoPage(); status(`Detected ${fresh.length} new face${fresh.length===1?'':'s'}`)}catch(e){console.error(e); status('Face detection unavailable'); if(!auto)alert(e.message)}}
 
-export function bindPhotos(){document.body.addEventListener('click',e=>{const p=e.target.closest('[data-photo-id]'); if(p)selectPhoto(p.dataset.photoId)}); $('photoInput')?.addEventListener('change',uploadPhoto); $('dashboardPhotoInput')?.addEventListener('change',uploadPhotoAndOpen); $('latestPhotoBtn')?.addEventListener('click',latestPhoto); $('prevPhotoBtn')?.addEventListener('click',prevPhoto); $('nextPhotoBtn')?.addEventListener('click',nextPhoto); $('addFaceBtn')?.addEventListener('click',addFaceBox); $('detectFacesBtn')?.addEventListener('click',()=>detectFaces(false)); $('deleteFaceBtn')?.addEventListener('click',deleteFace); $('toggleBoxesBtn')?.addEventListener('click',()=>{S.showBoxes=!S.showBoxes;renderPhotoPage()}); $('toggleNamesBtn')?.addEventListener('click',()=>{S.showNames=!S.showNames;renderPhotoPage()}); $('suggestFaceBtn')?.addEventListener('click',suggestFace); $('savePhotoMetaBtn')?.addEventListener('click',savePhotoMeta); $('postCommentBtn')?.addEventListener('click',postComment); document.body.addEventListener('click',e=>{if(e.target.id==='attachExistingBtn')attachExisting(); if(e.target.id==='saveTypedFaceBtn')saveFaceName(); if(e.target.id==='suggestCorrectionBtn'||e.target.id==='suggestFaceInline')suggestFace()}); $('mainPhoto')?.addEventListener('click',()=>{if(!S.editMode){S.selectedFaceId=null;renderFaceEditor()}});
+export function bindPhotos(){document.body.addEventListener('click',e=>{const p=e.target.closest('[data-photo-id]'); if(p)selectPhoto(p.dataset.photoId)}); $('photoInput')?.addEventListener('change',uploadPhoto); $('dashboardPhotoInput')?.addEventListener('change',uploadPhotoAndOpen); $('showUploadScreenBtn')?.addEventListener('click',()=>{S.currentPhoto=null;S.selectedFaceId=null;renderPhotoPage()}); $('latestPhotoBtn')?.addEventListener('click',latestPhoto); $('prevPhotoBtn')?.addEventListener('click',prevPhoto); $('nextPhotoBtn')?.addEventListener('click',nextPhoto); $('addFaceBtn')?.addEventListener('click',addFaceBox); $('detectFacesBtn')?.addEventListener('click',()=>detectFaces(false)); $('deleteFaceBtn')?.addEventListener('click',deleteFace); $('toggleBoxesBtn')?.addEventListener('click',()=>{S.showBoxes=!S.showBoxes;renderPhotoPage()}); $('toggleNamesBtn')?.addEventListener('click',()=>{S.showNames=!S.showNames;renderPhotoPage()}); $('suggestFaceBtn')?.addEventListener('click',suggestFace); $('savePhotoMetaBtn')?.addEventListener('click',savePhotoMeta); $('postCommentBtn')?.addEventListener('click',postComment); document.body.addEventListener('click',e=>{if(e.target.id==='attachExistingBtn')attachExisting(); if(e.target.id==='saveTypedFaceBtn')saveFaceName(); if(e.target.id==='suggestCorrectionBtn'||e.target.id==='suggestFaceInline')suggestFace()}); $('mainPhoto')?.addEventListener('click',()=>{if(!S.editMode){S.selectedFaceId=null;renderFaceEditor()}});
   let resizeTimer; const onResize=()=>{clearTimeout(resizeTimer); resizeTimer=setTimeout(repositionFaceBoxes,150)}; window.addEventListener('resize',onResize); window.addEventListener('orientationchange',onResize);
   bindDropZone($('dashboardDropZone'),async file=>{await uploadPhotoFile(file); if(S.currentPhoto){const {showPage}=await import('./navigation.js'); await showPage('photo')}});
   bindDropZone($('photoCanvas'),uploadPhotoFile);
+  $('photoZoomInBtn')?.addEventListener('click',()=>zoomPhoto(.25));
+  $('photoZoomOutBtn')?.addEventListener('click',()=>zoomPhoto(-.25));
+  $('photoZoomResetBtn')?.addEventListener('click',resetPhotoZoom);
 }

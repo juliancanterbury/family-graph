@@ -120,7 +120,7 @@
             <button data-page="dashboard">← Dashboard</button>
             <button id="viewModeBtn">View mode</button>
             <button id="editModeBtn">Edit mode</button>
-            <label class="button primary">Upload photo<input id="photoInput" type="file" accept="image/*" hidden></label>
+            <button id="showUploadScreenBtn">Upload photo</button>
             <label class="owner-only private-toggle small"><input id="privatePhotoToggle" type="checkbox"> Private (only me)</label>
             <button id="latestPhotoBtn">Latest photo</button>
             <button id="prevPhotoBtn">← Prev</button>
@@ -130,13 +130,24 @@
             <button id="suggestFaceBtn">Suggest face/name</button>
             <button id="toggleBoxesBtn">Hide boxes</button>
             <button id="toggleNamesBtn">Hide names</button>
+            <button id="photoZoomOutBtn">−</button>
+            <span id="photoZoomLabel" class="save-status">100%</span>
+            <button id="photoZoomInBtn">+</button>
+            <button id="photoZoomResetBtn">Reset zoom</button>
             <button class="edit-only danger" id="deleteFaceBtn">Delete selected</button>
             <span id="saveStatus" class="save-status">Ready</span>
           </div>
           <div class="photo-scroll">
             <div class="photo-canvas" id="photoCanvas">
               <img id="mainPhoto" src="" alt="" crossorigin="anonymous">
-              <div id="emptyPhoto" class="empty-photo drop-zone">Upload a photo to begin — or drag and drop one here.</div>
+              <div id="emptyPhoto" class="empty-photo drop-zone">
+                <div class="empty-photo-inner">
+                  <span class="upload-icon">📷</span>
+                  <label class="button primary" for="photoInput">Choose a photo</label>
+                  <input id="photoInput" type="file" accept="image/*" hidden>
+                  <p class="small">or drag and drop one here</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>

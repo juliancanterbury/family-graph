@@ -24,6 +24,9 @@ function zoneChip(relId,p){return `<span class="zone-chip" data-remove-rel="${re
 function inviteMessageText(p,email){
   const ownerName=S.profile?.display_name||S.profile?.email?.split('@')[0]||'A family member';
   const given=(p.given_names||fullName(p).split(' ')[0]||'there');
+  const photoNote = p.avatar_path ? '' : `
+
+One more thing — the photo showing for you right now is just a placeholder, auto-cropped from a group photo. You can set your own anytime: go to your own page and tap "Set my photo" — it lets you take or upload a selfie, then drag two guide lines onto your eyes and chin to line it up, and that becomes your photo everywhere in the app.`;
   return `Hi ${given},
 
 ${ownerName} has invited you to Family Graph — our private family photo archive and family tree.
@@ -33,7 +36,7 @@ To join:
 2. Sign in using this email address: ${email}
 3. You'll get a secure sign-in link by email (no password needed) — just click it.
 
-Once you're in, you'll land straight on your own page, already connected to the family tree.
+Once you're in, you'll land straight on your own page, already connected to the family tree.${photoNote}
 
 — ${ownerName}`;
 }
@@ -71,7 +74,7 @@ function readOnlyRow(label,people){
 export async function renderPersonPage(id){
   const root=$('personPage'); if(!root)return;
   const p=personById(id);
-  if(!p){root.innerHTML='<button data-page="dashboard" class="back-link">← Back</button><p class="small">Person not found.</p>'; return}
+  if(!p){root.innerHTML='<button data-back class="back-link">← Back</button><p class="small">Person not found.</p>'; return}
   const parents=parentLinks(id), partners=partnerLinks(id), children=childLinks(id), siblings=siblingsOf(id), photos=personPhotos(id);
   const excludeIds=new Set([id,...parents.map(x=>x.p.id),...partners.map(x=>x.p.id),...children.map(x=>x.p.id)]);
   const galleryHtml=(await Promise.all(photos.map(async ph=>{const url=await publicUrl(ph); return `<button class="person-photo-thumb" data-open-photo="${ph.id}"><img src="${url}" alt=""></button>`}))).join('');
@@ -104,7 +107,7 @@ export async function renderPersonPage(id){
   const avatarBtnHtml = (isMe||canEdit()) ? `<button class="small-btn avatar-set-btn" data-set-avatar="${id}">${isMe?'Set my photo':'Set their photo'}</button>` : '';
 
   root.innerHTML=`
-    <button data-page="dashboard" class="back-link">← Back</button>
+    <button data-back class="back-link">← Back</button>
     <div class="person-mode-toggle"><button id="personViewModeBtn" class="${S.editMode?'':'primary'}">View mode</button><button id="personEditModeBtn" class="${S.editMode?'primary':''}">Edit mode</button></div>
     <div class="person-hero">
       ${await avatarHtml(p,'person-hero-photo')}
