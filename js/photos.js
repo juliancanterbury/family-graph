@@ -80,7 +80,49 @@ export async function nextPhoto(){const list=visiblePhotos(); const i=list.findI
 export async function addFaceBox(){if(!S.currentPhoto)return alert('Upload a photo first.'); const ins=await S.sb.from('faces').insert({photo_id:S.currentPhoto.id,x:0.4,y:0.35,w:0.15,h:0.18,label:null,status:'manual',created_by:userId()}).select().single(); if(ins.error)return alert(ins.error.message); S.faces.push(ins.data); S.selectedFaceId=ins.data.id; await renderPhotoPage(); status('Face saved')}
 export async function attachExisting(){const f=S.faces.find(x=>x.id===S.selectedFaceId), pid=$('existingPersonSelect')?.value; if(!f||!pid)return alert('Choose an existing person first.'); if(!canEditFace(f))return alert('Only whoever added this box (or the owner) can edit it directly — use "Suggest correction" instead.'); const p=person(pid); const upd=await S.sb.from('faces').update({person_id:pid,label:fullName(p),status:'confirmed'}).eq('id',f.id).select().single(); if(upd.error)return alert(upd.error.message); Object.assign(f,upd.data); await renderPhotoPage(); await renderPeople(); status('Face linked')}
 export async function saveFaceName(){const f=S.faces.find(x=>x.id===S.selectedFaceId), name=titleCaseName($('faceName')?.value||''); if(!f||!name)return; if(!canEditFace(f))return alert('Only whoever added this box (or the owner) can edit it directly — use "Suggest correction" instead.'); let p=S.people.find(x=>fullName(x).toLowerCase()===name.toLowerCase()); if(!p){const match=findSimilarPerson(name); if(match&&!match.exact&&!confirm(`"${fullName(match.person)}" already exists and looks similar. Create "${name}" as a separate new person anyway?`))return; const parts=name.split(' '); const ins=await S.sb.from('people').insert({display_name:name,given_names:parts[0]||name,family_name:parts.slice(1).join(' ')||null,created_by:userId()}).select().single(); if(ins.error)return alert(ins.error.message); p=ins.data; S.people.push(p)} const upd=await S.sb.from('faces').update({person_id:p.id,label:fullName(p),status:'confirmed'}).eq('id',f.id).select().single(); if(upd.error)return alert(upd.error.message); Object.assign(f,upd.data); await renderPhotoPage(); await renderPeople(); status('Face saved')}
-export async function deleteFace(){const f=S.faces.find(x=>x.id===S.selectedFaceId); if(!f)return; if(!canEditFace(f))return alert('Only whoever added this box (or the owner) can delete it.'); const del=await S.sb.from('faces').delete().eq('id',S.selectedFaceId); if(del.error)return alert(del.error.message); S.faces=S.faces.filter(f=>f.id!==S.selectedFaceId); S.selectedFaceId=null; await renderPhotoPage()}
+export async function deletePhoto(){
+  if(!S.currentPhoto)return;
+  const ph=S.currentPhoto;
+  if(!canDelete()&&ph.uploaded_by!==userId())return alert('Only whoever uploaded this photo (or the owner) can delete it.');
+  if(!confirm('Delete this photo and all its face tags? This cannot be undone.'))return;
+  const del=await S.sb.from('photos').delete().eq('id',ph.id);
+  if(del.error)return alert(del.error.message);
+  await S.sb.storage.from(bucket()).remove([ph.storage_path]).catch(()=>{});
+  S.photos=S.photos.filter(p=>p.id!==ph.id);
+  S.faces=S.faces.filter(f=>f.photo_id!==ph.id);
+  S.currentPhoto=null; S.selectedFaceId=null;
+  await renderPhotoPage();
+  status('Photo deleted');
+}
+export async function rotatePhoto(direction){
+  if(!S.currentPhoto)return;
+  const ph=S.currentPhoto;
+  if(!canDelete()&&ph.uploaded_by!==userId())return alert('Only whoever uploaded this photo (or the owner) can rotate it.');
+  const img=$('mainPhoto'); if(!img||!img.complete||!img.naturalWidth)return alert('Wait for the photo to finish loading first.');
+  status('Rotating…');
+  const nw=img.naturalWidth, nh=img.naturalHeight, newW=nh, newH=nw;
+  const canvas=document.createElement('canvas'); canvas.width=newW; canvas.height=newH;
+  const ctx=canvas.getContext('2d');
+  if(direction===90){ctx.translate(newW,0); ctx.rotate(Math.PI/2)} else {ctx.translate(0,newH); ctx.rotate(-Math.PI/2)}
+  ctx.drawImage(img,0,0,nw,nh);
+  const blob=await new Promise(res=>canvas.toBlob(res,'image/jpeg',0.92));
+  const up=await S.sb.storage.from(bucket()).upload(ph.storage_path,blob,{upsert:true,contentType:'image/jpeg'});
+  if(up.error){alert(up.error.message);return}
+  const photoFaces=S.faces.filter(f=>f.photo_id===ph.id);
+  for(const f of photoFaces){
+    if(isLegacyPx(f))continue; // legacy boxes can't be safely rotated automatically — same one-time-nudge fix as before applies
+    const x=+f.x||0,y=+f.y||0,w=+f.w||0,h=+f.h||0;
+    let nx,ny,nwF,nhF;
+    if(direction===90){nx=1-y-h; ny=x; nwF=h; nhF=w} else {nx=y; ny=1-x-w; nwF=h; nhF=w}
+    const upd=await S.sb.from('faces').update({x:nx,y:ny,w:nwF,h:nhF}).eq('id',f.id).select().single();
+    if(!upd.error)Object.assign(f,upd.data);
+  }
+  const updPhoto=await S.sb.from('photos').update({width:newW,height:newH}).eq('id',ph.id).select().single();
+  if(!updPhoto.error){Object.assign(S.currentPhoto,updPhoto.data); const idx=S.photos.findIndex(p=>p.id===ph.id); if(idx>-1)S.photos[idx]=S.currentPhoto}
+  S.photoZoom=1; S.photoBaseWidth=null;
+  await renderPhotoPage();
+  status('Photo rotated');
+}
 export async function savePhotoMeta(){if(!S.currentPhoto)return; const patch={}; const d=$('photoDate')?.value||null, loc=$('photoPlace')?.value||null; ['date_taken','photo_date','taken_at'].forEach(k=>{if(k in S.currentPhoto)patch[k]=d}); ['location','place'].forEach(k=>{if(k in S.currentPhoto)patch[k]=loc}); if(!Object.keys(patch).length)return alert('No editable photo date/place columns found.'); const r=await S.sb.from('photos').update(patch).eq('id',S.currentPhoto.id).select().single(); if(r.error)return alert(r.error.message); Object.assign(S.currentPhoto,r.data); await renderPhotos(); status('Photo details saved')}
 export async function postComment(){const body=$('commentText')?.value.trim(); if(!body)return; const row=await addOptional('comments',{photo_id:S.currentPhoto?.id,body,author_id:userId(),author_name:userName(),status:'open'}); S.comments.unshift(row); $('commentText').value=''; renderComments()}
 export async function suggestFace(){const body=prompt('Who or what should be corrected/added?'); if(!body)return; const row=await addOptional('suggestions',{type:'photo_face_suggestion',photo_id:S.currentPhoto?.id,face_id:S.selectedFaceId,body,suggested_value:body,author_id:userId(),author_name:userName(),status:'open'}); S.suggestions.unshift(row); alert('Suggestion added for review.')}
@@ -105,4 +147,30 @@ export function bindPhotos(){document.body.addEventListener('click',e=>{const p=
   $('photoZoomInBtn')?.addEventListener('click',()=>zoomPhoto(.25));
   $('photoZoomOutBtn')?.addEventListener('click',()=>zoomPhoto(-.25));
   $('photoZoomResetBtn')?.addEventListener('click',resetPhotoZoom);
+  $('rotateLeftBtn')?.addEventListener('click',()=>rotatePhoto(-90));
+  $('rotateRightBtn')?.addEventListener('click',()=>rotatePhoto(90));
+  $('deletePhotoBtn')?.addEventListener('click',deletePhoto);
+  bindPhotoZoomGestures();
 }
+function bindPhotoZoomGestures(){
+  const scroll=document.querySelector('.photo-scroll'); if(!scroll)return;
+  scroll.addEventListener('wheel',e=>{
+    if(!S.currentPhoto)return;
+    e.preventDefault();
+    zoomPhoto(e.deltaY<0?.15:-.15);
+  },{passive:false});
+  let pinchStartDist=0, pinchStartZoom=1;
+  scroll.addEventListener('touchstart',e=>{
+    if(e.touches.length===2){pinchStartDist=touchDist(e.touches); pinchStartZoom=S.photoZoom}
+  },{passive:true});
+  scroll.addEventListener('touchmove',e=>{
+    if(e.touches.length===2 && pinchStartDist>0){
+      e.preventDefault();
+      const ratio=touchDist(e.touches)/pinchStartDist;
+      S.photoZoom=Math.max(.3,Math.min(3,+(pinchStartZoom*ratio).toFixed(2)));
+      applyPhotoZoom();
+    }
+  },{passive:false});
+  scroll.addEventListener('touchend',()=>{pinchStartDist=0});
+}
+function touchDist(t){const dx=t[0].clientX-t[1].clientX, dy=t[0].clientY-t[1].clientY; return Math.hypot(dx,dy)}

@@ -13,7 +13,8 @@ export async function signOut(){await S.sb.auth.signOut()}
 export async function ensureProfile(){
   const u=S.session.user, email=u.email||''; const found=await S.sb.from('profiles').select('*').eq('user_id',u.id).maybeSingle();
   if(found.data) S.profile=found.data; else {
-    const role=email.toLowerCase()==='julian.canterbury@gmail.com'?'owner':'contributor';
+    const first=await S.sb.rpc('is_first_signup');
+    const role=(first.data===true)?'owner':'contributor';
     const ins=await S.sb.from('profiles').insert({user_id:u.id,email,display_name:email.split('@')[0],role}).select().single();
     S.profile=ins.data||{email,role};
     // First sign-in: if someone already invited this email to a specific person, link automatically.

@@ -194,6 +194,19 @@ every face individually, so uploading 20 at once just creates a backlog of
 20 photos needing identical manual attention, one at a time anyway. Revisit
 this once recognition is built; it becomes much more valuable then.
 
+## Slideshows from own and others' photos
+People should be able to build a slideshow drawing on both their own uploads
+and other family members' photos — not restricted to only what they
+personally added. Fits the existing "favorites" idea well (a slideshow could
+easily be built from a favorites list), and is a nice, low-risk way to make
+the archive feel more alive without touching the accurate data underneath.
+
+## Cropping, as part of photo enhancement
+Alongside deblur/colorize (see photo restoration section above), basic manual
+cropping of a photo itself (not just the face-box crop used for avatars)
+belongs in the same "Enhance this photo" feature — same non-destructive
+principle applies: crop creates a new version, never overwrites the original.
+
 ## Duplicate people (e.g. "Robert Canterbury" / "Rob Canterbury")
 Two layers needed:
 1. Prevention — fuzzy name matching plus a small nickname dictionary
