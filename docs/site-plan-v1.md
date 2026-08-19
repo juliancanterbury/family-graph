@@ -207,6 +207,15 @@ cropping of a photo itself (not just the face-box crop used for avatars)
 belongs in the same "Enhance this photo" feature — same non-destructive
 principle applies: crop creates a new version, never overwrites the original.
 
+## Places autocomplete + small map for photo location (parked)
+Real "type a few letters, get place suggestions" needs an external service
+(Google Places is standard) — a Google Cloud account, an API key, and a
+possible small ongoing cost. The free alternative is a small bundled list of
+common places, but it wouldn't recognize anything not specifically included
+(e.g. "Punjab" would need to be manually added). Deliberately on hold —
+revisit when there's appetite to make that call. Free-text date/location
+entry (no autocomplete, no map) already works in the meantime.
+
 ## Duplicate people (e.g. "Robert Canterbury" / "Rob Canterbury")
 Two layers needed:
 1. Prevention — fuzzy name matching plus a small nickname dictionary

@@ -7,7 +7,7 @@ export async function showPage(page='dashboard'){
   document.querySelectorAll('.page').forEach(p=>p.classList.add('hidden'));
   $(page+'Page')?.classList.remove('hidden');
   document.querySelectorAll('nav button[data-page]').forEach(b=>b.classList.toggle('primary',b.dataset.page===page));
-  if(location.hash!=='#'+page) history.replaceState(null,'','#'+page);
+  if(location.hash!=='#'+page) history.pushState(null,'','#'+page);
   if(page!=='photo') S.selectedFaceId=null;
   await renderPage(page);
 }

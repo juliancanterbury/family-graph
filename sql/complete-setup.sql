@@ -32,7 +32,7 @@ create table if not exists people (
 create table if not exists photos (
   id uuid primary key default gen_random_uuid(),
   title text,
-  taken_date date,
+  taken_date text,
   location text,
   storage_path text not null,
   original_filename text,

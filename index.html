@@ -110,14 +110,11 @@
       <!-- PHOTOS -->
       <section id="photoPage" class="page photo-page hidden">
         <aside class="photo-left">
-          <h3>People</h3>
-          <div id="photoPeopleNav" class="photo-people-nav"></div>
           <h3>Photos</h3>
           <div id="photoList" class="photo-list"></div>
         </aside>
         <div class="photo-main">
           <div class="toolbar">
-            <button data-page="dashboard">← Dashboard</button>
             <button id="viewModeBtn">View mode</button>
             <button id="editModeBtn">Edit mode</button>
             <button id="showUploadScreenBtn">Upload photo</button>
@@ -131,7 +128,6 @@
             <button id="toggleBoxesBtn">Hide boxes</button>
             <button id="toggleNamesBtn">Hide names</button>
             <button id="photoZoomOutBtn">−</button>
-            <span id="photoZoomLabel" class="save-status">100%</span>
             <button id="photoZoomInBtn">+</button>
             <button id="photoZoomResetBtn">Reset zoom</button>
             <button id="rotateLeftBtn" class="edit-only">Rotate ↺</button>
@@ -162,7 +158,7 @@
             <p><strong id="faceCount">0</strong> face boxes</p>
             <p><strong id="namedCount">0</strong> named faces</p>
             <p class="small" id="photoUploaderLine">Uploaded by: —</p>
-            <div class="row"><label>Date</label><input id="photoDate" type="date"></div>
+            <div class="row"><label>Date</label><input id="photoDate" type="text" placeholder="e.g. 1975, May 2003, 12 Jan 1998"></div>
             <div class="row"><label>Place</label><input id="photoPlace" placeholder="Location"></div>
             <button class="full" id="savePhotoMetaBtn">Save photo details</button>
           </div>
