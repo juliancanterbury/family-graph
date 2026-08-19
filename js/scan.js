@@ -81,39 +81,81 @@ async function processScanImage(file){
   return results;
 }
 
+// --- Live camera capture (the primary "Scan Photos" flow) ---
+let cameraStream=null;
+async function openLiveCamera(){
+  const stage=$('scanStage'); if(!stage)return;
+  stage.innerHTML=`
+    <div class="camera-view-wrap">
+      <video id="scanVideo" autoplay playsinline muted></video>
+      <div class="camera-hint">Lay your photos on a table or floor, spaced apart, then hold the phone over them and tap Scan.</div>
+    </div>
+    <div class="avatar-align-actions">
+      <button id="cameraCancelBtn">Cancel</button>
+      <button class="primary big-scan-btn" id="cameraScanBtn">📷 Scan</button>
+    </div>`;
+  $('cameraCancelBtn')?.addEventListener('click',closeScanCapture);
+  $('cameraScanBtn')?.addEventListener('click',captureFromCamera);
+  try{
+    cameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1920}}});
+    const video=$('scanVideo'); if(video)video.srcObject=cameraStream;
+  }catch(e){
+    stage.innerHTML=`<p class="small">Couldn't access the camera (${e.message}). Check your browser's camera permission for this site, or use "Upload an existing scan or photo" instead.</p><div class="avatar-align-actions"><button id="cameraCancelBtn2">Close</button></div>`;
+    $('cameraCancelBtn2')?.addEventListener('click',closeScanCapture);
+  }
+}
+function stopCamera(){if(cameraStream){cameraStream.getTracks().forEach(t=>t.stop()); cameraStream=null}}
+async function captureFromCamera(){
+  const video=$('scanVideo'); if(!video||!video.videoWidth)return;
+  const canvas=document.createElement('canvas'); canvas.width=video.videoWidth; canvas.height=video.videoHeight;
+  canvas.getContext('2d').drawImage(video,0,0);
+  const blob=await new Promise(res=>canvas.toBlob(res,'image/jpeg',0.92));
+  stopCamera();
+  const file=new File([blob],'scan-capture.jpg',{type:'image/jpeg'});
+  await runScan(file);
+}
+
 export function openScanCapture(){
   const ov=$('avatarCaptureOverlay'); if(!ov)return;
   ov.classList.remove('hidden');
   ov.innerHTML=`
     <div class="avatar-capture-box scan-box">
-      <h2>Scan multiple photos at once</h2>
-      <p class="small">Lay several photos on a plain, contrasting surface (or use a scanner), photograph or scan the whole spread, then upload that one image here. Works best with good lighting, photos that aren't overlapping or touching, and a background clearly different from the photos themselves.</p>
-      <input id="scanFileInput" type="file" accept="image/*" capture="environment">
-      <div id="scanProgress" class="hidden"><p class="small">Finding photos… this can take a few seconds.</p></div>
-      <div id="scanResults" class="scan-results hidden"></div>
+      <h2>Scan photos</h2>
+      <div id="scanStage">
+        <p class="small">Lay several photos on a plain, contrasting surface, spaced apart, then scan them all in one go.</p>
+        <button class="primary full big-scan-btn" id="startCameraBtn">📷 Scan photos</button>
+        <p class="small scan-secondary-label">Have a scanner, or a photo already taken? </p>
+        <input id="scanFileInput" type="file" accept="image/*">
+        <div id="scanProgress" class="hidden"><p class="small">Finding photos… this can take a few seconds.</p></div>
+        <div id="scanResults" class="scan-results hidden"></div>
+      </div>
       <div class="avatar-align-actions">
         <button id="scanCloseBtn">Close</button>
-        <button class="primary hidden" id="scanUploadAllBtn">Upload selected</button>
+        <button class="primary hidden" id="scanUploadAllBtn">Save all</button>
       </div>
     </div>`;
+  $('startCameraBtn')?.addEventListener('click',openLiveCamera);
   $('scanFileInput')?.addEventListener('change',onScanFileChosen);
   $('scanCloseBtn')?.addEventListener('click',closeScanCapture);
   ov.addEventListener('click',e=>{if(e.target===ov)closeScanCapture()});
 }
-export function closeScanCapture(){const ov=$('avatarCaptureOverlay'); if(ov){ov.classList.add('hidden'); ov.innerHTML=''} scanCandidates=[]}
+export function closeScanCapture(){stopCamera(); const ov=$('avatarCaptureOverlay'); if(ov){ov.classList.add('hidden'); ov.innerHTML=''} scanCandidates=[]}
 
 async function onScanFileChosen(ev){
   const file=ev.target.files?.[0]; if(!file)return;
-  $('scanProgress')?.classList.remove('hidden');
-  $('scanResults')?.classList.add('hidden');
+  await runScan(file);
+}
+async function runScan(file){
+  const stage=$('scanStage');
+  if(stage)stage.innerHTML=`<div id="scanProgress"><p class="small">Finding photos… this can take a few seconds.</p></div><div id="scanResults" class="scan-results hidden"></div>`;
   try{
     const results=await processScanImage(file);
-    $('scanProgress')?.classList.add('hidden');
     if(!results.length){
-      const box=$('scanResults'); if(box){box.innerHTML='<p class="small">Couldn\'t find any clear rectangular photos in that image. Try better lighting, a plainer background, or spacing the photos apart so they don\'t touch.</p>'; box.classList.remove('hidden')}
+      const box=$('scanResults'); if(box){box.innerHTML='<p class="small">Couldn\'t find any clear rectangular photos in that image. Try better lighting, a plainer background, or spacing the photos apart so they don\'t touch. You can try again.</p><button class="full" id="scanTryAgainBtn">Try again</button>'; box.classList.remove('hidden'); $('scanProgress')?.classList.add('hidden'); $('scanTryAgainBtn')?.addEventListener('click',openScanCapture)}
       return;
     }
     scanCandidates=results.map((r,i)=>({...r,include:true,id:i}));
+    $('scanProgress')?.classList.add('hidden');
     renderScanResults();
   }catch(e){
     console.error(e);
@@ -124,7 +166,7 @@ async function onScanFileChosen(ev){
 function renderScanResults(){
   const box=$('scanResults'); if(!box)return;
   box.classList.remove('hidden');
-  box.innerHTML=`<p class="small">Found ${scanCandidates.length} photo${scanCandidates.length===1?'':'s'}. Untick any that aren't right.</p><div class="scan-grid">${scanCandidates.map(c=>`<label class="scan-item"><input type="checkbox" data-scan-toggle="${c.id}" ${c.include?'checked':''}><img src="${c.url}"></label>`).join('')}</div>`;
+  box.innerHTML=`<p class="small">Found ${scanCandidates.length} photo${scanCandidates.length===1?'':'s'} — ready to save. Untick anything that isn't right first.</p><div class="scan-grid">${scanCandidates.map(c=>`<label class="scan-item"><input type="checkbox" data-scan-toggle="${c.id}" ${c.include?'checked':''}><img src="${c.url}"></label>`).join('')}</div>`;
   $('scanUploadAllBtn')?.classList.remove('hidden');
 }
 export function bindScanCapture(){
