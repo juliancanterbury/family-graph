@@ -61,4 +61,4 @@ export async function loadAll(){
   S.people=p.data||[]; S.photos=ph.data||[]; S.faces=f.data||[]; S.relationships=r.data||[]; [S.suggestions,S.comments,S.feedback,S.profiles]=await Promise.all([optionalTable('suggestions'),optionalTable('comments'),optionalTable('feedback'),optionalTable('profiles')]);
   S.currentPhoto=S.photos.find(x=>x.id===S.currentPhoto?.id)||S.photos[0]||null; await renderAll(); status('Loaded');
 }
-export async function publicUrl(photo){if(!photo)return''; return S.sb.storage.from(bucket()).getPublicUrl(photo.storage_path).data.publicUrl}
+export async function publicUrl(photo){if(!photo)return''; const base=S.sb.storage.from(bucket()).getPublicUrl(photo.storage_path).data.publicUrl; return photo.updated_at?`${base}?v=${encodeURIComponent(photo.updated_at)}`:base}

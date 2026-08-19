@@ -40,6 +40,7 @@ create table if not exists photos (
   width integer,
   height integer,
   private boolean default false,
+  updated_at timestamptz,
   uploaded_by uuid references auth.users(id) on delete set null,
   created_at timestamptz default now()
 );
@@ -189,14 +190,17 @@ create policy "signed in write feedback" on feedback for all to authenticated us
 
 create policy "read own profile" on profiles for select to authenticated using (auth.uid() = user_id);
 create policy "write own profile" on profiles for all to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "owner reads all profiles" on profiles for select to authenticated using (
-  exists (select 1 from profiles me where me.user_id = auth.uid() and me.role = 'owner')
-);
-create policy "owner updates all profiles" on profiles for update to authenticated using (
-  exists (select 1 from profiles me where me.user_id = auth.uid() and me.role = 'owner')
-) with check (
-  exists (select 1 from profiles me where me.user_id = auth.uid() and me.role = 'owner')
-);
+create or replace function is_owner()
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists(select 1 from profiles where user_id = auth.uid() and role = 'owner');
+$$;
+grant execute on function is_owner() to authenticated;
+create policy "owner reads all profiles" on profiles for select to authenticated using (is_owner());
+create policy "owner updates all profiles" on profiles for update to authenticated using (is_owner()) with check (is_owner());
 
 create policy "signed in read media" on storage.objects
 for select to authenticated

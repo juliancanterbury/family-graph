@@ -125,7 +125,7 @@ export async function rotatePhoto(direction){
     const upd=await S.sb.from('faces').update({x:nx,y:ny,w:nwF,h:nhF}).eq('id',f.id).select().single();
     if(!upd.error)Object.assign(f,upd.data);
   }
-  const updPhoto=await S.sb.from('photos').update({width:newW,height:newH}).eq('id',ph.id).select().single();
+  const updPhoto=await S.sb.from('photos').update({width:newW,height:newH,updated_at:new Date().toISOString()}).eq('id',ph.id).select().single();
   if(!updPhoto.error){Object.assign(S.currentPhoto,updPhoto.data); const idx=S.photos.findIndex(p=>p.id===ph.id); if(idx>-1)S.photos[idx]=S.currentPhoto}
   S.photoZoom=1; S.photoBaseWidth=null;
   await renderPhotoPage();
