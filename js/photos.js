@@ -58,7 +58,14 @@ export function renderFaceEditor(){
   if(!canEdit()||!canEditFace(f)){const reason=!canEdit()?'':'<p class="small">Added by someone else — you can suggest a correction, but only they (or the owner) can edit or delete this box directly.</p>'; w.innerHTML=`<p><strong>${esc(p?fullName(p):(f.label||'Unnamed'))}</strong></p>${reason}<textarea id="faceSuggestionText" placeholder="Suggest a correction…"></textarea><button class="primary full" id="sendFaceSuggestion">Send suggestion</button>`;return}
   w.innerHTML=`<div class="selected-face-summary"><p class="small">Current</p><strong>${p?`<button class="link-btn" data-person-id="${p.id}">${esc(fullName(p))} →</button>`:esc(f.label||'Unnamed face')}</strong></div><div class="form-grid compact-form"><label>Use existing person<select id="existingPersonSelect">${personOptions(f.person_id||'')}</select></label><button class="primary full" id="attachExistingBtn">Use selected person</button><label>Create new person<input id="faceName" value="${esc(p?fullName(p):(f.label||''))}" placeholder="Type a new full name"></label><button class="full" id="saveTypedFaceBtn">Create / save typed name</button><button class="full" id="suggestCorrectionBtn">Suggest correction instead</button></div>`;
 }
-export function renderPhotoStats(){text('faceCount',S.currentPhoto?S.faces.filter(f=>f.photo_id===S.currentPhoto.id).length:0); text('namedCount',S.currentPhoto?S.faces.filter(f=>f.photo_id===S.currentPhoto.id&&f.person_id).length:0); text('toggleBoxesBtn',S.showBoxes?'Hide boxes':'Show boxes'); text('toggleNamesBtn',S.showNames?'Hide names':'Show names')}
+export function renderPhotoStats(){text('faceCount',S.currentPhoto?S.faces.filter(f=>f.photo_id===S.currentPhoto.id).length:0); text('namedCount',S.currentPhoto?S.faces.filter(f=>f.photo_id===S.currentPhoto.id&&f.person_id).length:0); text('toggleBoxesBtn',S.showBoxes?'Hide boxes':'Show boxes'); text('toggleNamesBtn',S.showNames?'Hide names':'Show names');
+  const upLine=$('photoUploaderLine');
+  if(upLine){
+    if(!S.currentPhoto){upLine.textContent='Uploaded by: —'}
+    else if(S.currentPhoto.uploaded_by===userId()){upLine.textContent='Uploaded by: you'}
+    else {const p=S.profiles?.find(x=>x.user_id===S.currentPhoto.uploaded_by); upLine.textContent='Uploaded by: '+(p?(p.display_name||p.email):(canDelete()?'Unknown account':'Only the owner can see who uploaded this'))}
+  }
+}
 export function renderComments(){const box=$('photoComments'); if(!box)return; const rows=S.comments.filter(c=>c.photo_id===S.currentPhoto?.id).slice(0,20); box.innerHTML=rows.length?rows.map(c=>`<div class="comment"><b>${esc(c.author_name||c.created_by||'Family member')}</b><br>${esc(c.body||c.comment||'')}</div>`).join(''):'No comments yet.'}
 function fillRelationshipSelects(){const opts=visiblePeople().map(p=>`<option value="${p.id}">${esc(fullName(p))}</option>`).join(''); html('relA',opts); html('relB',opts)}
 export async function selectPhoto(id){const ph=S.photos.find(p=>p.id===id); if(!ph)return; S.currentPhoto=ph; S.selectedFaceId=null; S.photoZoom=1; S.photoBaseWidth=null; await renderPhotoPage(); status('Photo loaded')}

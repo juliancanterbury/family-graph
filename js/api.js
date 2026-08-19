@@ -11,19 +11,28 @@ export async function routeAuth(){ if(!S.session){hide('loading');hide('app');sh
 export async function sendLogin(){const email=$('emailInput')?.value.trim(); if(!email)return alert('Enter email address.'); const {error}=await S.sb.auth.signInWithOtp({email,options:{emailRedirectTo:REDIRECT_URL}}); text('loginMessage',error?error.message:'Check your email for the sign-in link.')}
 export async function signOut(){await S.sb.auth.signOut()}
 export async function ensureProfile(){
-  const u=S.session.user, email=u.email||''; const found=await S.sb.from('profiles').select('*').eq('user_id',u.id).maybeSingle();
-  if(found.data) S.profile=found.data; else {
+  const u=S.session.user, email=u.email||'';
+  let found=await S.sb.from('profiles').select('*').eq('user_id',u.id).maybeSingle();
+  if(found.error) found=await S.sb.from('profiles').select('*').eq('user_id',u.id).maybeSingle(); // one retry — a real error isn't "you're a new user"
+  if(found.error) throw new Error('Could not load your account (network issue). Please refresh and try again.');
+  if(found.data){
+    S.profile=found.data;
+  } else {
     const first=await S.sb.rpc('is_first_signup');
     const role=(first.data===true)?'owner':'contributor';
     const ins=await S.sb.from('profiles').insert({user_id:u.id,email,display_name:email.split('@')[0],role}).select().single();
-    S.profile=ins.data||{email,role};
-    // First sign-in: if someone already invited this email to a specific person, link automatically.
-    if(S.profile && !S.profile.person_id){
-      const match=await S.sb.from('people').select('id').ilike('invite_email',email).limit(1).maybeSingle();
-      if(match.data?.id){
-        const link=await S.sb.from('profiles').update({person_id:match.data.id}).eq('user_id',u.id).select().single();
-        if(link.data) S.profile=link.data;
-        S.treeFocusId=match.data.id;
+    if(ins.error){
+      const recheck=await S.sb.from('profiles').select('*').eq('user_id',u.id).maybeSingle();
+      if(recheck.data) S.profile=recheck.data; else throw new Error('Could not set up your account. Please refresh and try again.');
+    } else {
+      S.profile=ins.data;
+      // First sign-in: if someone already invited this email to a specific person, link automatically.
+      if(!S.profile.person_id){
+        const match=await S.sb.from('people').select('id').ilike('invite_email',email).limit(1).maybeSingle();
+        if(match.data?.id){
+          const link=await S.sb.from('profiles').update({person_id:match.data.id}).eq('user_id',u.id).select().single();
+          if(link.data){S.profile=link.data; S.treeFocusId=match.data.id}
+        }
       }
     }
   }
