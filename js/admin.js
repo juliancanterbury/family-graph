@@ -30,7 +30,7 @@ async function backfillFaceDescriptors(btn){
     if(!photo){failed+=faces.length; faces.forEach(tick); continue}
     let img;
     try{
-      img=new Image();
+      img=new Image(); img.crossOrigin='anonymous';
       const url=await publicUrl(photo);
       await new Promise((res,rej)=>{img.onload=res; img.onerror=()=>rej(new Error('image load failed')); img.src=url});
     }catch(e){failed+=faces.length; faces.forEach(tick); continue}
@@ -43,7 +43,7 @@ async function backfillFaceDescriptors(btn){
         const cw=Math.min(nw,bx+bw+padX)-cx, ch=Math.min(nh,by+bh+padY)-cy;
         const canvas=document.createElement('canvas'); canvas.width=Math.max(1,Math.round(cw)); canvas.height=Math.max(1,Math.round(ch));
         canvas.getContext('2d').drawImage(img,cx,cy,cw,ch,0,0,canvas.width,canvas.height);
-        const r=await human.detect(canvas);
+        const r=await Promise.race([human.detect(canvas),new Promise((_,rej)=>setTimeout(()=>rej(new Error('timed out')),15000))]);
         const face=(r.face||[])[0];
         const descriptor=(face?.embedding&&face.embedding.length)?Array.from(face.embedding):null;
         if(!descriptor){failed++; tick(); continue}
