@@ -49,8 +49,40 @@ export function applyPhotoZoom(){
   const label=$('photoZoomLabel'); if(label)label.textContent=Math.round(S.photoZoom*100)+'%';
   repositionFaceBoxes();
 }
-export function zoomPhoto(delta){S.photoZoom=Math.max(.3,Math.min(3,+(S.photoZoom+delta).toFixed(2))); applyPhotoZoom()}
+export function zoomPhoto(delta){zoomPhotoAt(delta,null)}
 export function resetPhotoZoom(){S.photoZoom=1; applyPhotoZoom()}
+// Zoom while keeping the point under (clientX,clientY) fixed on screen — falls back to
+// the center of the visible photo area if no point is given (e.g. toolbar +/- buttons).
+export function zoomPhotoAt(delta,point){
+  const img=$('mainPhoto'), scroll=document.querySelector('.photo-scroll');
+  const newZoom=Math.max(.3,Math.min(3,+(S.photoZoom+delta).toFixed(2)));
+  if(!img||!scroll||newZoom===S.photoZoom){S.photoZoom=newZoom; applyPhotoZoom(); return}
+  const rectBefore=img.getBoundingClientRect();
+  const px=point?point.x:rectBefore.left+rectBefore.width/2;
+  const py=point?point.y:rectBefore.top+rectBefore.height/2;
+  const fracX=rectBefore.width?(px-rectBefore.left)/rectBefore.width:.5;
+  const fracY=rectBefore.height?(py-rectBefore.top)/rectBefore.height:.5;
+  S.photoZoom=newZoom;
+  applyPhotoZoom();
+  const rectAfter=img.getBoundingClientRect();
+  const targetX=rectAfter.left+fracX*rectAfter.width, targetY=rectAfter.top+fracY*rectAfter.height;
+  scroll.scrollLeft+=targetX-px; scroll.scrollTop+=targetY-py;
+}
+export function setPhotoZoomAbsolute(newZoom,point){
+  const img=$('mainPhoto'), scroll=document.querySelector('.photo-scroll');
+  newZoom=Math.max(.3,Math.min(3,+newZoom.toFixed(2)));
+  if(!img||!scroll){S.photoZoom=newZoom; applyPhotoZoom(); return}
+  const rectBefore=img.getBoundingClientRect();
+  const px=point?point.x:rectBefore.left+rectBefore.width/2;
+  const py=point?point.y:rectBefore.top+rectBefore.height/2;
+  const fracX=rectBefore.width?(px-rectBefore.left)/rectBefore.width:.5;
+  const fracY=rectBefore.height?(py-rectBefore.top)/rectBefore.height:.5;
+  S.photoZoom=newZoom;
+  applyPhotoZoom();
+  const rectAfter=img.getBoundingClientRect();
+  const targetX=rectAfter.left+fracX*rectAfter.width, targetY=rectAfter.top+fracY*rectAfter.height;
+  scroll.scrollLeft+=targetX-px; scroll.scrollTop+=targetY-py;
+}
 export function renderFaceEditor(){
   const w=$('faceEditor'); if(!w)return; const f=S.faces.find(x=>x.id===S.selectedFaceId);
   if(!f){w.innerHTML='<p>Select or add a face box.</p><button class="full" id="suggestFaceInline">Suggest a face/name</button>';return}
@@ -189,20 +221,20 @@ function bindPhotoZoomGestures(){
   scroll.addEventListener('wheel',e=>{
     if(!S.currentPhoto)return;
     e.preventDefault();
-    zoomPhoto(e.deltaY<0?.15:-.15);
+    zoomPhotoAt(e.deltaY<0?.15:-.15,{x:e.clientX,y:e.clientY});
   },{passive:false});
-  let pinchStartDist=0, pinchStartZoom=1;
+  let pinchStartDist=0, pinchStartZoom=1, pinchMid=null;
   scroll.addEventListener('touchstart',e=>{
-    if(e.touches.length===2){pinchStartDist=touchDist(e.touches); pinchStartZoom=S.photoZoom}
+    if(e.touches.length===2){pinchStartDist=touchDist(e.touches); pinchStartZoom=S.photoZoom; pinchMid=touchMid(e.touches)}
   },{passive:true});
   scroll.addEventListener('touchmove',e=>{
     if(e.touches.length===2 && pinchStartDist>0){
       e.preventDefault();
       const ratio=touchDist(e.touches)/pinchStartDist;
-      S.photoZoom=Math.max(.3,Math.min(3,+(pinchStartZoom*ratio).toFixed(2)));
-      applyPhotoZoom();
+      setPhotoZoomAbsolute(pinchStartZoom*ratio,pinchMid);
     }
   },{passive:false});
-  scroll.addEventListener('touchend',()=>{pinchStartDist=0});
+  scroll.addEventListener('touchend',()=>{pinchStartDist=0; pinchMid=null});
 }
 function touchDist(t){const dx=t[0].clientX-t[1].clientX, dy=t[0].clientY-t[1].clientY; return Math.hypot(dx,dy)}
+function touchMid(t){return {x:(t[0].clientX+t[1].clientX)/2,y:(t[0].clientY+t[1].clientY)/2}}
