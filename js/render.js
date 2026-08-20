@@ -5,7 +5,7 @@ import { renderTree } from './tree.js';
 import { renderAdmin } from './admin.js';
 import { renderReview } from './review.js';
 import { renderRelationshipList } from './relationships.js';
-export async function renderAll(){updateDashboard(); setClasses(); applyTheme(); await renderPhotos(); await renderPeople(); renderRelationshipList(); await renderPage((location.hash||'#dashboard').replace('#','')||'dashboard')}
+export async function renderAll(){updateDashboard(); setClasses(); applyTheme(); await renderPhotos(); await renderPeople(); renderRelationshipList(); await renderPage(((location.hash||'#dashboard').replace('#','').split('/')[0])||'dashboard')}
 export async function renderPage(page){
   updateDashboard(); setClasses();
   if(page==='photo') await renderPhotoPage();

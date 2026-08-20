@@ -1,15 +1,23 @@
 import { S, $, setClasses } from './state.js';
 import { renderPage } from './render.js';
 import { renderPersonPage } from './person.js';
-export function pageName(){return (location.hash||'#dashboard').replace('#','')||'dashboard'}
+export function pageName(){return ((location.hash||'#dashboard').replace('#','').split('/')[0])||'dashboard'}
 export async function showPage(page='dashboard'){
   if(!$(page+'Page')) page='dashboard';
   document.querySelectorAll('.page').forEach(p=>p.classList.add('hidden'));
   $(page+'Page')?.classList.remove('hidden');
   document.querySelectorAll('nav button[data-page]').forEach(b=>b.classList.toggle('primary',b.dataset.page===page));
-  if(location.hash!=='#'+page) history.pushState(null,'','#'+page);
+  const hashBase=(location.hash||'').split('/')[0];
+  if(hashBase!=='#'+page) history.pushState(null,'','#'+page);
   if(page!=='photo') S.selectedFaceId=null;
   await renderPage(page);
+  if(page==='photo'){
+    const h=location.hash||'';
+    if(h.startsWith('#photo/')){
+      const id=decodeURIComponent(h.slice('#photo/'.length));
+      const {selectPhoto}=await import('./photos.js'); await selectPhoto(id);
+    }
+  }
 }
 export async function showPerson(id){
   if(!id)return;
