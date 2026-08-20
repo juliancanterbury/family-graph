@@ -1,6 +1,6 @@
 import { S, $ } from './state.js';
 
-let cvPromise=null, scanCandidates=[];
+let cvPromise=null, scanCandidates=[], scanTicker=null;
 
 function loadOpenCV(){
   if(cvPromise)return cvPromise;
@@ -63,7 +63,9 @@ function warpToRect(cv,srcMat,corners){
 }
 function matToBlob(cv,mat){const canvas=document.createElement('canvas'); cv.imshow(canvas,mat); return new Promise(res=>canvas.toBlob(res,'image/jpeg',0.92))}
 
-async function processScanImage(file){
+// Runs entirely on the main thread — only used as a fallback for browsers
+// without Worker/OffscreenCanvas support, since this blocks the UI while it runs.
+async function processScanImageMainThread(file){
   const cv=await loadOpenCV();
   const img=await loadImageEl(file);
   const canvas=document.createElement('canvas'); canvas.width=img.naturalWidth; canvas.height=img.naturalHeight;
@@ -79,6 +81,47 @@ async function processScanImage(file){
   }
   srcMat.delete();
   return results;
+}
+
+// --- Worker-backed processing (keeps the tab responsive while OpenCV works) ---
+function supportsWorkerScan(){return typeof Worker!=='undefined'&&typeof OffscreenCanvas!=='undefined'&&typeof createImageBitmap!=='undefined'}
+let scanWorker=null, scanWorkerBlobUrl=null, scanMsgId=0;
+// Loaded via a Blob URL rather than a direct file URL: a worker created
+// straight from the network file was observed to hang permanently right as
+// OpenCV's WASM runtime finished initializing, while the identical code
+// loaded through a Blob URL worked instantly and reliably.
+async function getScanWorker(){
+  if(scanWorker)return scanWorker;
+  if(!scanWorkerBlobUrl){
+    const src=await fetch(new URL('./scan-worker.js',import.meta.url)).then(r=>r.text());
+    scanWorkerBlobUrl=URL.createObjectURL(new Blob([src],{type:'application/javascript'}));
+  }
+  scanWorker=new Worker(scanWorkerBlobUrl);
+  return scanWorker;
+}
+function terminateScanWorker(){if(scanWorker){scanWorker.terminate(); scanWorker=null}}
+async function processScanImageInWorker(file){
+  let bitmap;
+  try{bitmap=await createImageBitmap(file)}catch(e){throw new Error('Could not read that image file.')}
+  const worker=await getScanWorker();
+  const id=++scanMsgId;
+  return new Promise((resolve,reject)=>{
+    const onMessage=(e)=>{
+      if(e.data.id!==id)return;
+      worker.removeEventListener('message',onMessage);
+      worker.removeEventListener('error',onError);
+      if(!e.data.ok){reject(new Error(e.data.error||'Scan failed.')); return}
+      resolve(e.data.results.map(blob=>({blob,url:URL.createObjectURL(blob)})));
+    };
+    const onError=(e)=>{
+      worker.removeEventListener('message',onMessage);
+      worker.removeEventListener('error',onError);
+      reject(new Error(e.message||'Scan worker crashed.'));
+    };
+    worker.addEventListener('message',onMessage);
+    worker.addEventListener('error',onError);
+    worker.postMessage({id,bitmap},[bitmap]);
+  });
 }
 
 // --- Live camera capture (the primary "Scan Photos" flow) ---
@@ -139,17 +182,21 @@ export function openScanCapture(){
   $('scanCloseBtn')?.addEventListener('click',closeScanCapture);
   ov.addEventListener('click',e=>{if(e.target===ov)closeScanCapture()});
 }
-export function closeScanCapture(){stopCamera(); const ov=$('avatarCaptureOverlay'); if(ov){ov.classList.add('hidden'); ov.innerHTML=''} scanCandidates=[]}
+export function closeScanCapture(){stopCamera(); terminateScanWorker(); clearInterval(scanTicker); scanTicker=null; const ov=$('avatarCaptureOverlay'); if(ov){ov.classList.add('hidden'); ov.innerHTML=''} scanCandidates=[]}
 
 async function onScanFileChosen(ev){
   const file=ev.target.files?.[0]; if(!file)return;
   await runScan(file);
 }
 async function runScan(file){
-  const stage=$('scanStage');
-  if(stage)stage.innerHTML=`<div id="scanProgress"><p class="small">Finding photos… this can take a few seconds.</p></div><div id="scanResults" class="scan-results hidden"></div>`;
+  const stage=$('scanStage'); const usingWorker=supportsWorkerScan();
+  if(stage)stage.innerHTML=`<div id="scanProgress"><p class="small" id="scanProgressText">Finding photos… this can take a while depending on your device — feel free to close this and try again.</p></div><div id="scanResults" class="scan-results hidden"></div>`;
+  const started=Date.now();
+  clearInterval(scanTicker);
+  scanTicker=setInterval(()=>{const el=$('scanProgressText'); if(el)el.textContent=`Finding photos… still working (${Math.round((Date.now()-started)/1000)}s) — feel free to close this and try again.`},1000);
   try{
-    const results=await processScanImage(file);
+    const results=usingWorker?await processScanImageInWorker(file):await processScanImageMainThread(file);
+    clearInterval(scanTicker); scanTicker=null;
     if(!results.length){
       const box=$('scanResults'); if(box){box.innerHTML='<p class="small">Couldn\'t find any clear rectangular photos in that image. Try better lighting, a plainer background, or spacing the photos apart so they don\'t touch. You can try again.</p><button class="full" id="scanTryAgainBtn">Try again</button>'; box.classList.remove('hidden'); $('scanProgress')?.classList.add('hidden'); $('scanTryAgainBtn')?.addEventListener('click',openScanCapture)}
       return;
@@ -158,6 +205,7 @@ async function runScan(file){
     $('scanProgress')?.classList.add('hidden');
     renderScanResults();
   }catch(e){
+    clearInterval(scanTicker); scanTicker=null;
     console.error(e);
     $('scanProgress')?.classList.add('hidden');
     const box=$('scanResults'); if(box){box.innerHTML=`<p class="small">Something went wrong: ${e.message}</p>`; box.classList.remove('hidden')}
