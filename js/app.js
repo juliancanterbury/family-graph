@@ -1,6 +1,6 @@
 import { initSupabase, routeAuth, sendLogin, signOut, loadAll } from './api.js';
 import { $, hide, show, text, applyTheme, S } from './state.js';
-import { renderAll } from './render.js';
+import { renderAll, bindPersonPickers } from './render.js';
 import { bindNavigation, showPage, pageName, setEditMode } from './navigation.js';
 import { bindPhotos } from './photos.js';
 import { bindPeople } from './people.js';
@@ -15,7 +15,7 @@ export async function boot(){
   catch(e){console.error(e); hide('loading');hide('login');hide('app');show('problem'); text('problemText',e.message)}
 }
 function bindAll(){
-  bindNavigation(); bindPhotos(); bindPeople(); bindTree(); bindReview(); bindAdmin(); bindPerson(); bindAvatarCapture(); bindScanCapture();
+  bindNavigation(); bindPhotos(); bindPeople(); bindTree(); bindReview(); bindAdmin(); bindPerson(); bindAvatarCapture(); bindScanCapture(); bindPersonPickers();
   $('loginBtn')?.addEventListener('click',sendLogin); $('signOutBtn')?.addEventListener('click',signOut); $('refreshBtn')?.addEventListener('click',loadAll);
   $('viewModeBtn')?.addEventListener('click',()=>setEditMode(false)); $('editModeBtn')?.addEventListener('click',()=>setEditMode(true));
   $('scopeToggleBtn')?.addEventListener('click',toggleScope);

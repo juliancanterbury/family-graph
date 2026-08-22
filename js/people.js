@@ -25,6 +25,6 @@ export async function addPerson(){
 export async function deletePerson(id){if(!canDelete())return alert('Only owner can delete people.'); const p=S.people.find(x=>x.id===id); if(!p||!confirm(`Delete ${fullName(p)}?`))return; await S.sb.from('relationships').delete().or(`from_person_id.eq.${id},to_person_id.eq.${id}`); await S.sb.from('faces').update({person_id:null,label:null,status:'unconfirmed'}).eq('person_id',id); const del=await S.sb.from('people').delete().eq('id',id); if(del.error)return alert(del.error.message); S.people=S.people.filter(x=>x.id!==id); S.relationships=S.relationships.filter(r=>r.from_person_id!==id&&r.to_person_id!==id); S.faces.forEach(f=>{if(f.person_id===id){f.person_id=null;f.label=null}}); await renderAll()}
 export function bindPeople(){document.getElementById('addPersonBtn')?.addEventListener('click',addPerson); document.getElementById('peopleSortBtn')?.addEventListener('click',togglePeopleSort); document.body.addEventListener('click',e=>{const b=e.target.closest('[data-delete-person]'); if(b)deletePerson(b.dataset.deletePerson)}); $('whoAreYouBtn')?.addEventListener('click',saveMyPerson)}
 async function saveMyPerson(){
-  const id=$('whoAreYouSelect')?.value; if(!id)return alert('Pick yourself from the list first.');
+  const id=$('whoAreYouSelect')?.dataset.value; if(!id)return alert('Pick yourself from the list first.');
   await setMyPerson(id); await renderAll();
 }

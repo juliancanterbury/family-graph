@@ -83,7 +83,7 @@
             <p class="small">Link your account to your own entry in the family tree — this is what lets the app show you your own family first.</p>
           </div>
           <div class="who-are-you-controls">
-            <select id="whoAreYouSelect"></select>
+            <div id="whoAreYouSelect" class="person-picker custom-select" data-value=""></div>
             <button class="primary" id="whoAreYouBtn">This is me</button>
           </div>
           <p class="small">Not listed yet? Add yourself on the <button class="link-btn" data-page="people">People page</button> first, then come back here.</p>
@@ -253,12 +253,18 @@
           <button id="zoomOutBtn">−</button>
           <button id="zoomResetBtn">100%</button>
           <span id="zoomLabel" class="save-status">100%</span>
-          <label class="tree-scope-label">Show <select id="treeGenerationSelect">
-            <option value="1">Immediate family</option>
-            <option value="3" selected>3 generations</option>
-            <option value="5">5 generations</option>
-            <option value="all">Everyone</option>
-          </select></label>
+          <div class="tree-scope-label">
+            <span>Show</span>
+            <div class="custom-select" id="treeGenerationSelect" data-value="3">
+              <button type="button" class="custom-select-btn" id="treeGenerationSelectBtn">3 generations</button>
+              <div class="custom-select-menu hidden">
+                <button type="button" data-value="1">Immediate family</button>
+                <button type="button" data-value="3">3 generations</button>
+                <button type="button" data-value="5">5 generations</button>
+                <button type="button" data-value="all">Everyone</button>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="tree-help-strip" id="treeHelpStrip">Click a person to make them the centre of the tree. Use "Show" to limit how many generations appear around them.</div>
         <div id="treeFocusChip" class="tree-focus-chip hidden"><span></span> · click to re-centre on yourself</div>

@@ -93,10 +93,19 @@ function defaultFocusId(ids) {
   return sorted[0]?.id || null;
 }
 
+function syncGenerationSelect() {
+  const wrap = $('treeGenerationSelect'), btn = $('treeGenerationSelectBtn');
+  if (!wrap || !btn) return;
+  const val = String(S.treeGenerationLimit);
+  if (wrap.dataset.value === val) return;
+  wrap.dataset.value = val;
+  const opt = wrap.querySelector(`[data-value="${val}"]`);
+  if (opt) btn.textContent = opt.textContent;
+}
+
 function syncFocusChip() {
   const chip = $('treeFocusChip');
-  const sel = $('treeGenerationSelect');
-  if (sel && sel.value !== String(S.treeGenerationLimit)) sel.value = String(S.treeGenerationLimit);
+  syncGenerationSelect();
   if (!chip) return;
   const p = person(S.treeFocusId);
   if (!p) { chip.classList.add('hidden'); return }
@@ -203,7 +212,17 @@ export function bindTree() {
   document.getElementById('zoomResetBtn')?.addEventListener('click', zoomResetGraph);
   document.getElementById('themeRail')?.addEventListener('click', e => { const b = e.target.closest('[data-theme]'); if (b) { import('./state.js').then(m => m.applyTheme(b.dataset.theme)) } });
   document.getElementById('treeFocusChip')?.addEventListener('click', clearTreeFocus);
-  document.getElementById('treeGenerationSelect')?.addEventListener('change', e => { S.treeGenerationLimit = e.target.value === 'all' ? 'all' : +e.target.value; renderTree() });
+  document.getElementById('treeGenerationSelectBtn')?.addEventListener('click', e => {
+    e.stopPropagation();
+    document.querySelectorAll('.custom-select-menu').forEach(m => m.classList.toggle('hidden', m !== e.target.nextElementSibling));
+  });
+  document.getElementById('treeGenerationSelect')?.addEventListener('click', e => {
+    const opt = e.target.closest('[data-value]'); if (!opt) return;
+    S.treeGenerationLimit = opt.dataset.value === 'all' ? 'all' : +opt.dataset.value;
+    e.currentTarget.querySelector('.custom-select-menu')?.classList.add('hidden');
+    renderTree();
+  });
+  document.addEventListener('click', () => document.querySelectorAll('.custom-select-menu').forEach(m => m.classList.add('hidden')));
   document.getElementById('treeViewToggle')?.addEventListener('click', e => {
     const b = e.target.closest('[data-tree-view]'); if (!b) return;
     S.treeViewMode = b.dataset.treeView;
