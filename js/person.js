@@ -1,4 +1,4 @@
-import { S, $, esc, fullName, person as personById, visiblePeople, canEdit, canDelete, userId, REDIRECT_URL } from './state.js';
+import { S, $, esc, fullName, titleCaseName, person as personById, visiblePeople, canEdit, canDelete, userId, REDIRECT_URL } from './state.js';
 import { avatarHtml } from './render.js';
 import { publicUrl } from './api.js';
 import { createRelationship, deleteRelationship } from './relationships.js';
@@ -110,6 +110,18 @@ export async function renderPersonPage(id){
   const sourcesHtml=sources.map(s=>`<div class="source-item"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title||s.url)}</a>${s.note?`<p class="small">${esc(s.note)}</p>`:''}${(canDelete()||s.created_by===userId())?`<button class="danger small-btn" data-delete-source="${s.id}">Remove</button>`:''}</div>`).join('');
   const addSourceHtml = canEdit() ? `<div class="add-source-row"><input id="sourceUrlInput" type="url" placeholder="Paste a link — a genealogy record, gravestone page, archive entry…"><input id="sourceTitleInput" type="text" placeholder="Title (optional)"><button class="primary" id="addSourceBtn" data-add-source="${id}">Add source</button></div>` : '';
 
+  const canEditDetails = isMe||canEdit();
+  const detailsEditHtml = (S.editMode&&canEditDetails) ? `
+    <div class="person-details-edit">
+      <div class="row"><label>Full name</label><input id="editFullName" value="${esc(fullName(p))}"></div>
+      <div class="row"><label>Maiden name</label><input id="editMaidenName" value="${esc(p.maiden_name||'')}" placeholder="Née / birth surname"></div>
+      <div class="row"><label>Birth date</label><input id="editBirthDate" type="date" value="${esc(p.birth_date||'')}"></div>
+      <div class="row"><label>Death date</label><input id="editDeathDate" type="date" value="${esc(p.death_date||'')}"></div>
+      <label class="small living-check"><input id="editLiving" type="checkbox" ${p.living===false?'':'checked'}> Still living</label>
+      <button class="primary full" id="savePersonDetailsBtn" data-save-person="${id}">Save details</button>
+    </div>
+  ` : '';
+
   root.innerHTML=`
     <button data-back class="back-link">← Back</button>
     <div class="person-mode-toggle"><button id="personViewModeBtn" class="${S.editMode?'':'primary'}">View mode</button><button id="personEditModeBtn" class="${S.editMode?'primary':''}">Edit mode</button></div>
@@ -117,11 +129,13 @@ export async function renderPersonPage(id){
       ${await avatarHtml(p,'person-hero-photo')}
       <div>
         <h2>${esc(fullName(p))}</h2>
+        ${p.maiden_name?`<p class="small">née ${esc(p.maiden_name)}</p>`:''}
         <p class="small">${esc(p.birth_date||'Birth date unknown')}${p.death_date?' – '+esc(p.death_date):(p.living===false?' – deceased':'')}</p>
         ${avatarBtnHtml}
         ${inviteHtml}
       </div>
     </div>
+    ${detailsEditHtml}
 
     ${relSection}
     ${siblings.length?`<div class="person-rel-row siblings-row"><span class="person-rel-label">Siblings</span><div class="person-rel-list">${siblings.map(s=>`<button class="person-chip" data-person-id="${s.id}">${esc(fullName(s))}</button>`).join('')}</div><span class="small">(derived from shared parents)</span></div>`:''}
@@ -149,6 +163,29 @@ export function bindPerson(){
   document.body.addEventListener('click',async e=>{
     const modeBtn=e.target.closest('#personViewModeBtn,#personEditModeBtn');
     if(modeBtn){e.preventDefault(); const {setEditMode}=await import('./navigation.js'); setEditMode(modeBtn.id==='personEditModeBtn'); return}
+
+    const saveDetailsBtn=e.target.closest('[data-save-person]');
+    if(saveDetailsBtn){
+      e.preventDefault();
+      const pid=saveDetailsBtn.dataset.savePerson;
+      const name=titleCaseName(($('editFullName')?.value||'').trim());
+      if(!name)return alert('Name cannot be empty.');
+      const nameParts=name.split(' ');
+      const patch={
+        display_name: name,
+        given_names: nameParts[0]||name,
+        family_name: nameParts.slice(1).join(' ')||null,
+        maiden_name: ($('editMaidenName')?.value||'').trim()||null,
+        birth_date: $('editBirthDate')?.value||null,
+        death_date: $('editDeathDate')?.value||null,
+        living: !!$('editLiving')?.checked,
+      };
+      const upd=await S.sb.from('people').update(patch).eq('id',pid).select().single();
+      if(upd.error)return alert(upd.error.message);
+      const idx=S.people.findIndex(x=>x.id===pid); if(idx>-1)S.people[idx]=upd.data;
+      await renderPersonPage(pid);
+      return;
+    }
 
     const addSourceBtn=e.target.closest('[data-add-source]');
     if(addSourceBtn){
