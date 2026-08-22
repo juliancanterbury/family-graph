@@ -4,8 +4,7 @@ export const S = {
   currentPhoto:null, selectedFaceId:null, currentRel:'mother', graphScale:1,
   showBoxes:true, showNames:true, editMode:false, dbTab:'people', dbSelected:null,
   theme:localStorage.getItem('familyGraphTheme') || 'ocean', human:null, humanPromise:null,
-  showEveryone:localStorage.getItem('familyGraphShowEveryone')==='1', treeFocusId:null, currentPersonId:null, returnTo:null, photoZoom:1, photoBaseWidth:null, treeGenerationLimit:3,
-  treeViewMode:localStorage.getItem('familyGraphTreeView')==='fan'?'fan':'tree'
+  showEveryone:localStorage.getItem('familyGraphShowEveryone')==='1', treeFocusId:null, currentPersonId:null, returnTo:null, photoZoom:1, photoBaseWidth:null, treeGenerationLimit:3
 };
 export const REDIRECT_URL='https://juliancanterbury.github.io/family-graph/';
 export const $=id=>document.getElementById(id);
