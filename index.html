@@ -15,12 +15,8 @@
   <link rel="stylesheet" href="css/admin.css">
   <link rel="stylesheet" href="css/dashboard.css">
   <link rel="stylesheet" href="css/person.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/family-chart@0.9.0/dist/styles/family-chart.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/@vladmandic/human/dist/human.js"></script>
-  <script type="importmap">
-  { "imports": { "d3": "https://cdn.jsdelivr.net/npm/d3@7/+esm" } }
-  </script>
 </head>
 <body data-theme="ocean">
 
@@ -243,10 +239,7 @@
       <!-- TREE -->
       <section id="graphPage" class="page graph-page hidden">
         <div class="toolbar tree-toolbar">
-          <div class="tree-view-toggle" id="treeViewToggle">
-            <button data-tree-view="tree" class="primary">Tree</button>
-            <button data-tree-view="fan">Fan chart</button>
-          </div>
+          <button id="rebuildGraphBtn">Rebuild</button>
           <button id="fitGraphBtn">Fit</button>
           <button id="zoomInBtn">+</button>
           <button id="zoomOutBtn">−</button>
@@ -259,8 +252,8 @@
             <option value="all">Everyone</option>
           </select></label>
         </div>
-        <div class="tree-help-strip" id="treeHelpStrip">Click a person to make them the centre of the tree. Use "Show" to limit how many generations appear around them.</div>
-        <div id="treeFocusChip" class="tree-focus-chip hidden"><span></span> · click to re-centre on yourself</div>
+        <div class="tree-help-strip">Click a person to make them the centre of the tree. Use "Show" to limit how many generations appear around them — this only applies once someone's focused.</div>
+        <div id="treeFocusChip" class="tree-focus-chip hidden"><span></span> · click to reset</div>
         <div class="theme-rail" id="themeRail">
           <button class="theme-chip" data-theme="ocean">01 Ocean</button>
           <button class="theme-chip" data-theme="forest">02 Forest</button>
@@ -272,8 +265,7 @@
           <button class="theme-chip" data-theme="sky">08 Sky</button>
           <button class="theme-chip" data-theme="amber">09 Amber</button>
         </div>
-        <div class="graph-wrap" id="graphWrap"><div class="graph f3" id="graph"></div></div>
-        <div class="graph-wrap hidden" id="fanWrap"><svg class="fan-svg" id="fanSvg"></svg></div>
+        <div class="graph-wrap" id="graphWrap"><div class="graph" id="graph"></div></div>
       </section>
     </main>
   </div>

@@ -70,7 +70,7 @@ This is the "People contain photos" idea from the earlier ChatGPT conversation �
 not built yet, and probably the single most valuable thing to add next.
 
 ## 3. Everything else — status check
-- **Tree/Graph** — rebuilt on the `family-chart` library (see `docs/tree-rebuild-brief.md`); a Fan chart view was added alongside it. Still purely for "how is everyone related," not identifying.
+- **Tree/Graph** — keep as-is, it's for "how is everyone related," not identifying.
 - **People list** — becomes a simple directory: portrait + name, tap → Person page.
 - **Review/Inbox** — keep for later; not urgent while basic identifying is still clunky.
 - **Admin** — keep hidden behind owner role, no change needed yet.
