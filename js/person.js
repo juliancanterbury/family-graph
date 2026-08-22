@@ -136,11 +136,11 @@ export async function renderPersonPage(id){
 }
 
 async function link(zone,focusId,otherId){
-  let from=focusId,to=otherId,type=zone;
-  if(zone==='parent'){from=otherId;to=focusId;type='parent'}
-  else if(zone==='child'){from=focusId;to=otherId;type='parent'}
-  else {type='partner'}
-  const res=await createRelationship(from,to,type,zone);
+  let from=focusId,to=otherId,type=zone,label=zone;
+  if(zone==='parent'){from=otherId;to=focusId;type='parent';label='parent'}
+  else if(zone==='child'){from=focusId;to=otherId;type='parent';label='parent'}
+  else {type='partner';label='partner'}
+  const res=await createRelationship(from,to,type,label);
   if(res.error){alert(res.error);return}
   await renderPersonPage(focusId);
 }
