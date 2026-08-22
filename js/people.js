@@ -1,4 +1,4 @@
-import { S, $, esc, fullName, titleCaseName, userId, canDelete, visiblePeople, findSimilarPerson } from './state.js';
+import { S, $, esc, fullName, titleCaseName, userId, canEdit, canDelete, visiblePeople, findSimilarPerson } from './state.js';
 import { avatarHtml } from './render.js';
 import { renderAll } from './render.js';
 import { setMyPerson } from './api.js';
@@ -15,6 +15,7 @@ export async function renderPeople(){
 }
 function togglePeopleSort(){const cur=localStorage.getItem('familyGraphPeopleSort')||'given_names'; localStorage.setItem('familyGraphPeopleSort',cur==='given_names'?'family_name':'given_names'); renderPeople()}
 export async function addPerson(){
+  if(!canEdit())return alert('You don\'t have permission to add people.');
   const raw=prompt('Full name'); const name=titleCaseName(raw); if(!name)return;
   const match=findSimilarPerson(name);
   if(match?.exact){alert(`${fullName(match.person)} already exists — opening their page instead of creating a duplicate.`); const {showPerson}=await import('./navigation.js'); await showPerson(match.person.id); return}

@@ -88,7 +88,7 @@
           </div>
           <p class="small">Not listed yet? Add yourself on the <button class="link-btn" data-page="people">People page</button> first, then come back here.</p>
         </div>
-        <div class="dashboard-hero card">
+        <div class="dashboard-hero card contributor-only">
           <div>
             <p class="small eyebrow">Family archive</p>
             <h2>Start here</h2>
@@ -137,8 +137,8 @@
         <div class="photo-main">
           <div class="toolbar">
             <button id="viewModeBtn">View mode</button>
-            <button id="editModeBtn">Edit mode</button>
-            <button id="showUploadScreenBtn">Upload photo</button>
+            <button id="editModeBtn" class="contributor-only">Edit mode</button>
+            <button id="showUploadScreenBtn" class="contributor-only">Upload photo</button>
             <label class="owner-only private-toggle small"><input id="privatePhotoToggle" type="checkbox"> Private (only me)</label>
             <button id="latestPhotoBtn">Latest photo</button>
             <button id="prevPhotoBtn">← Prev</button>
@@ -163,9 +163,9 @@
               <div id="emptyPhoto" class="empty-photo drop-zone">
                 <div class="empty-photo-inner">
                   <span class="upload-icon">📷</span>
-                  <label class="button primary" for="photoInput">Choose a photo</label>
+                  <label class="button primary contributor-only" for="photoInput">Choose a photo</label>
                   <input id="photoInput" type="file" accept="image/*" hidden>
-                  <p class="small">or drag and drop one here</p>
+                  <p class="small contributor-only">or drag and drop one here</p>
                 </div>
               </div>
             </div>
@@ -186,8 +186,8 @@
           <div class="card comments-card">
             <h2>Comments / corrections</h2>
             <div id="photoComments" class="comment-list small">No comments yet.</div>
-            <textarea id="commentText" placeholder="Add a note, correction or question…"></textarea>
-            <button class="primary full" id="postCommentBtn">Post comment</button>
+            <textarea id="commentText" class="contributor-only" placeholder="Add a note, correction or question…"></textarea>
+            <button class="primary full contributor-only" id="postCommentBtn">Post comment</button>
           </div>
         </aside>
       </section>
@@ -197,7 +197,7 @@
 
       <!-- PEOPLE -->
       <section id="peoplePage" class="page people-page hidden">
-        <div class="people-head"><h2>People</h2><button id="peopleSortBtn">Sort: First name</button><button class="primary" id="addPersonBtn">Add person</button></div>
+        <div class="people-head"><h2>People</h2><button id="peopleSortBtn">Sort: First name</button><button class="primary contributor-only" id="addPersonBtn">Add person</button></div>
         <div id="peopleList" class="people-list"></div>
       </section>
 

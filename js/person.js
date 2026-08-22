@@ -81,7 +81,7 @@ export async function renderPersonPage(id){
   const excludeIds=new Set([id,...parents.map(x=>x.p.id),...partners.map(x=>x.p.id),...children.map(x=>x.p.id)]);
   const galleryHtml=(await Promise.all(photos.map(async ph=>{const url=await publicUrl(ph); return `<button class="person-photo-thumb" data-open-photo="${ph.id}"><img src="${url}" alt=""></button>`}))).join('');
 
-  const relSection = S.editMode ? `
+  const relSection = (S.editMode&&canEdit()) ? `
     <div class="rel-builder" data-focus="${id}">
       <div class="rel-zone" data-zone="parent"><div class="zone-label">Parent</div><div class="zone-chips">${parents.map(x=>zoneChip(x.relId,x.p)).join('')||'<span class="zone-empty">drop here</span>'}</div></div>
       <div class="rel-builder-center">${await avatarHtml(p,'rel-center-photo')}<strong>${esc(fullName(p))}</strong></div>
@@ -106,13 +106,13 @@ export async function renderPersonPage(id){
     : p.invite_email ? `<p class="small invite-status">Invited: ${esc(p.invite_email)} — waiting for them to sign in.</p>`
     : `<div class="invite-row"><input id="inviteEmailInput" type="email" placeholder="Their email address"><button id="inviteSendBtn" data-invite-person="${id}">Invite by email</button></div>`
   ) : (isMe ? '<p class="small invite-status">This is you.</p>' : (p.invite_email ? `<p class="small invite-status">Invited — waiting for them to sign in.</p>` : ''));
-  const avatarBtnHtml = (isMe||canEdit()) ? `<button class="small-btn avatar-set-btn" data-set-avatar="${id}">${isMe?'Set my photo':'Set their photo'}</button>` : '';
+  const avatarBtnHtml = canEdit() ? `<button class="small-btn avatar-set-btn" data-set-avatar="${id}">${isMe?'Set my photo':'Set their photo'}</button>` : '';
 
   const sources=S.sources.filter(s=>s.person_id===id);
   const sourcesHtml=sources.map(s=>`<div class="source-item"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title||s.url)}</a>${s.note?`<p class="small">${esc(s.note)}</p>`:''}${(canDelete()||s.created_by===userId())?`<button class="danger small-btn" data-delete-source="${s.id}">Remove</button>`:''}</div>`).join('');
   const addSourceHtml = canEdit() ? `<div class="add-source-row"><input id="sourceUrlInput" type="url" placeholder="Paste a link — a genealogy record, gravestone page, archive entry…"><input id="sourceTitleInput" type="text" placeholder="Title (optional)"><button class="primary" id="addSourceBtn" data-add-source="${id}">Add source</button></div>` : '';
 
-  const canEditDetails = isMe||canEdit();
+  const canEditDetails = canEdit();
   const detailsEditHtml = (S.editMode&&canEditDetails) ? `
     <div class="person-details-edit">
       <div class="row"><label>Full name</label><input id="editFullName" value="${esc(fullName(p))}"></div>
@@ -126,7 +126,7 @@ export async function renderPersonPage(id){
 
   root.innerHTML=`
     <button data-back class="back-link">← Back</button>
-    <div class="person-mode-toggle"><button id="personViewModeBtn" class="${S.editMode?'':'primary'}">View mode</button><button id="personEditModeBtn" class="${S.editMode?'primary':''}">Edit mode</button></div>
+    <div class="person-mode-toggle"><button id="personViewModeBtn" class="${S.editMode?'':'primary'}">View mode</button>${canEdit()?`<button id="personEditModeBtn" class="${S.editMode?'primary':''}">Edit mode</button>`:''}</div>
     <div class="person-hero">
       ${await avatarHtml(p,'person-hero-photo')}
       <div>
@@ -152,6 +152,7 @@ export async function renderPersonPage(id){
 }
 
 async function link(zone,focusId,otherId){
+  if(!canEdit())return;
   let from=focusId,to=otherId,type=zone,label=zone;
   if(zone==='parent'){from=otherId;to=focusId;type='parent';label='parent'}
   else if(zone==='child'){from=focusId;to=otherId;type='parent';label='parent'}
