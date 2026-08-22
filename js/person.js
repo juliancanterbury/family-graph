@@ -47,13 +47,15 @@ function showInviteMessage(p,email){
   ov.innerHTML=`
     <div class="avatar-capture-box invite-message-box">
       <h2>Invite ${esc(fullName(p))}</h2>
-      <p class="small">Copy this, or open it directly in your email app, then send it to ${esc(email)} yourself.</p>
+      <p class="small">Copy this, open it in your email app, or send it directly via Messages/WhatsApp — they'll still need to sign in with ${esc(email)} to get in.</p>
       <textarea id="inviteMessageText" readonly rows="10">${esc(msg)}</textarea>
       <div class="avatar-align-actions">
         <button id="inviteMsgCloseBtn">Close</button>
         <button id="inviteMsgCopyBtn">Copy text</button>
         <a class="button-link" id="inviteMsgMailtoBtn" href="mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent('Join our Family Graph')}&body=${encodeURIComponent(msg)}">Open in email app</a>
         <a class="primary button-link" id="inviteMsgGmailBtn" target="_blank" rel="noopener" href="https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}&su=${encodeURIComponent('Join our Family Graph')}&body=${encodeURIComponent(msg)}">Open in Gmail</a>
+        <a class="button-link" id="inviteMsgSmsBtn" href="sms:&body=${encodeURIComponent(msg)}">Send via Messages</a>
+        <a class="button-link" id="inviteMsgWhatsAppBtn" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(msg)}">Send via WhatsApp</a>
       </div>
     </div>`;
   $('inviteMsgCloseBtn')?.addEventListener('click',()=>{ov.classList.add('hidden');ov.innerHTML=''});
