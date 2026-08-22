@@ -30,7 +30,7 @@ async function avatarField(p) {
     return { avatarKind: 'img', avatarUrl: url };
   }
   const f = faceForPerson(p.id);
-  if (f) return { avatarKind: 'style', avatarStyle: await cropStyle(f, 120) };
+  if (f) return { avatarKind: 'style', avatarStyle: await cropStyle(f, 56) };
   return { avatarKind: 'initials', avatarInitials: initial(p) };
 }
 
