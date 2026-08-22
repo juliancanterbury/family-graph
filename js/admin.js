@@ -1,6 +1,6 @@
 import { S, $, html, esc, fullName, titleCaseName, canDelete, status } from './state.js';
 import { avatarHtml, photoTitle } from './render.js';
-import { relationshipSentence, renderRelationshipList } from './relationships.js';
+import { relationshipSentence } from './relationships.js';
 import { renderPeople } from './people.js';
 import { publicUrl } from './api.js';
 import { detector, isLegacyPx } from './photos.js';

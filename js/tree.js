@@ -104,6 +104,12 @@ function syncFocusChip() {
   chip.querySelector('span').textContent = 'Centred on ' + fullName(p);
 }
 
+function syncGraphHash() {
+  if (!S.treeFocusId) return;
+  const target = '#graph/' + encodeURIComponent(S.treeFocusId) + '/' + S.treeViewMode + '/' + S.treeGenerationLimit;
+  if (location.hash !== target) history.replaceState(null, '', target);
+}
+
 function onCardClick(e, d) {
   if (e.target.closest('[data-person-id]')) return;
   const id = d.data.id;
@@ -126,6 +132,7 @@ export async function renderTree() {
   const people = visiblePeople();
   const ids = new Set(people.map(p => p.id));
   S.treeFocusId = defaultFocusId(ids);
+  syncGraphHash();
 
   if (showFan) {
     chart = null;

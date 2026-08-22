@@ -10,6 +10,16 @@ export async function showPage(page='dashboard'){
   const hashBase=(location.hash||'').split('/')[0];
   if(hashBase!=='#'+page) history.pushState(null,'','#'+page);
   if(page!=='photo') S.selectedFaceId=null;
+  if(page==='graph'){
+    const h=location.hash||'';
+    if(h.startsWith('#graph/')){
+      const parts=h.slice('#graph/'.length).split('/');
+      const id=decodeURIComponent(parts[0]||'');
+      if(id) S.treeFocusId=id;
+      if(parts[1]==='tree'||parts[1]==='fan') S.treeViewMode=parts[1];
+      if(parts[2]) S.treeGenerationLimit=parts[2]==='all'?'all':+parts[2];
+    }
+  }
   await renderPage(page);
   if(page==='photo'){
     const h=location.hash||'';
