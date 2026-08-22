@@ -1,4 +1,4 @@
-import { S, $, esc, fullName, person as personById, visiblePeople, canEdit, canDelete, REDIRECT_URL } from './state.js';
+import { S, $, esc, fullName, person as personById, visiblePeople, canEdit, canDelete, userId, REDIRECT_URL } from './state.js';
 import { avatarHtml } from './render.js';
 import { publicUrl } from './api.js';
 import { createRelationship, deleteRelationship } from './relationships.js';
@@ -106,6 +106,10 @@ export async function renderPersonPage(id){
   ) : (isMe ? '<p class="small invite-status">This is you.</p>' : (p.invite_email ? `<p class="small invite-status">Invited — waiting for them to sign in.</p>` : ''));
   const avatarBtnHtml = (isMe||canEdit()) ? `<button class="small-btn avatar-set-btn" data-set-avatar="${id}">${isMe?'Set my photo':'Set their photo'}</button>` : '';
 
+  const sources=S.sources.filter(s=>s.person_id===id);
+  const sourcesHtml=sources.map(s=>`<div class="source-item"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title||s.url)}</a>${s.note?`<p class="small">${esc(s.note)}</p>`:''}${(canDelete()||s.created_by===userId())?`<button class="danger small-btn" data-delete-source="${s.id}">Remove</button>`:''}</div>`).join('');
+  const addSourceHtml = canEdit() ? `<div class="add-source-row"><input id="sourceUrlInput" type="url" placeholder="Paste a link — a genealogy record, gravestone page, archive entry…"><input id="sourceTitleInput" type="text" placeholder="Title (optional)"><button class="primary" id="addSourceBtn" data-add-source="${id}">Add source</button></div>` : '';
+
   root.innerHTML=`
     <button data-back class="back-link">← Back</button>
     <div class="person-mode-toggle"><button id="personViewModeBtn" class="${S.editMode?'':'primary'}">View mode</button><button id="personEditModeBtn" class="${S.editMode?'primary':''}">Edit mode</button></div>
@@ -124,6 +128,10 @@ export async function renderPersonPage(id){
 
     <h3>Photos (${photos.length})</h3>
     <div class="person-photo-grid">${galleryHtml||'<p class="small">No photos of this person yet.</p>'}</div>
+
+    <h3>Sources &amp; records (${sources.length})</h3>
+    <div class="source-list">${sourcesHtml||'<p class="small">No linked records yet — genealogy sites, gravestone pages, archive entries, anything that isn\'t a photo.</p>'}</div>
+    ${addSourceHtml}
   `;
 }
 
@@ -141,6 +149,31 @@ export function bindPerson(){
   document.body.addEventListener('click',async e=>{
     const modeBtn=e.target.closest('#personViewModeBtn,#personEditModeBtn');
     if(modeBtn){e.preventDefault(); const {setEditMode}=await import('./navigation.js'); setEditMode(modeBtn.id==='personEditModeBtn'); return}
+
+    const addSourceBtn=e.target.closest('[data-add-source]');
+    if(addSourceBtn){
+      e.preventDefault();
+      const pid=addSourceBtn.dataset.addSource;
+      const url=($('sourceUrlInput')?.value||'').trim(), title=($('sourceTitleInput')?.value||'').trim();
+      if(!url)return alert('Paste a link first.');
+      const ins=await S.sb.from('sources').insert({person_id:pid,url,title:title||null,created_by:userId()}).select().single();
+      if(ins.error)return alert(ins.error.message);
+      S.sources.unshift(ins.data);
+      await renderPersonPage(pid);
+      return;
+    }
+    const delSourceBtn=e.target.closest('[data-delete-source]');
+    if(delSourceBtn){
+      e.preventDefault();
+      if(!confirm('Remove this source?'))return;
+      const sid=delSourceBtn.dataset.deleteSource;
+      const src=S.sources.find(s=>s.id===sid);
+      const del=await S.sb.from('sources').delete().eq('id',sid);
+      if(del.error)return alert(del.error.message);
+      S.sources=S.sources.filter(s=>s.id!==sid);
+      if(src?.person_id)await renderPersonPage(src.person_id);
+      return;
+    }
 
     const inviteBtn=e.target.closest('[data-invite-person]');
     if(inviteBtn){e.preventDefault(); const email=($('inviteEmailInput')?.value||'').trim(); if(!email)return alert('Enter an email address first.'); const targetId=inviteBtn.dataset.invitePerson; const res=await invitePerson(targetId,email); if(res.error){alert(res.error);return} showInviteMessage(res.data,email); renderPersonPage(targetId); return}

@@ -58,7 +58,7 @@ export async function updateOptional(name,id,patch){try{const r=await S.sb.from(
 export async function loadAll(){
   status('Loading…'); const [p,ph,f,r]=await Promise.all([S.sb.from('people').select('*').order('created_at'),S.sb.from('photos').select('*').order('created_at',{ascending:false}),S.sb.from('faces').select('*').order('created_at'),S.sb.from('relationships').select('*').order('created_at')]);
   const err=p.error||ph.error||f.error||r.error; if(err) throw new Error('Database read failed: '+err.message);
-  S.people=p.data||[]; S.photos=ph.data||[]; S.faces=f.data||[]; S.relationships=r.data||[]; [S.suggestions,S.comments,S.feedback,S.profiles]=await Promise.all([optionalTable('suggestions'),optionalTable('comments'),optionalTable('feedback'),optionalTable('profiles')]);
+  S.people=p.data||[]; S.photos=ph.data||[]; S.faces=f.data||[]; S.relationships=r.data||[]; [S.suggestions,S.comments,S.feedback,S.profiles,S.sources]=await Promise.all([optionalTable('suggestions'),optionalTable('comments'),optionalTable('feedback'),optionalTable('profiles'),optionalTable('sources')]);
   S.currentPhoto=S.photos.find(x=>x.id===S.currentPhoto?.id)||S.photos[0]||null; await renderAll(); status('Loaded');
 }
 export async function publicUrl(photo){if(!photo)return''; const base=S.sb.storage.from(bucket()).getPublicUrl(photo.storage_path).data.publicUrl; return photo.updated_at?`${base}?v=${encodeURIComponent(photo.updated_at)}`:base}

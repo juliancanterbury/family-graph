@@ -245,8 +245,14 @@
           <button id="zoomOutBtn">−</button>
           <button id="zoomResetBtn">100%</button>
           <span id="zoomLabel" class="save-status">100%</span>
+          <label class="tree-scope-label">Show <select id="treeGenerationSelect">
+            <option value="1">Immediate family</option>
+            <option value="3" selected>3 generations</option>
+            <option value="5">5 generations</option>
+            <option value="all">Everyone</option>
+          </select></label>
         </div>
-        <div class="tree-help-strip">Click a person to make them the centre of the tree. Partner links never become parent/child links.</div>
+        <div class="tree-help-strip">Click a person to make them the centre of the tree. Use "Show" to limit how many generations appear around them — this only applies once someone's focused.</div>
         <div id="treeFocusChip" class="tree-focus-chip hidden"><span></span> · click to reset</div>
         <div class="theme-rail" id="themeRail">
           <button class="theme-chip" data-theme="ocean">01 Ocean</button>
