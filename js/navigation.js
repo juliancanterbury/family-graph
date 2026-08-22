@@ -42,7 +42,7 @@ export function bindNavigation(){
   document.body.addEventListener('click',e=>{
     const back=e.target.closest('[data-back]'); if(back){e.preventDefault(); goBack(); return}
     const person=e.target.closest('[data-person-id]'); if(person && !e.target.closest('[data-no-nav]')){e.preventDefault(); showPerson(person.dataset.personId); return}
-    const btn=e.target.closest('[data-page]'); if(btn){e.preventDefault();showPage(btn.dataset.page)}
+    const btn=e.target.closest('[data-page]'); if(btn){e.preventDefault(); if(btn.dataset.page==='graph'&&S.currentPersonId)S.treeFocusId=S.currentPersonId; showPage(btn.dataset.page)}
   });
   window.addEventListener('hashchange',()=>{
     const h=location.hash||'';
