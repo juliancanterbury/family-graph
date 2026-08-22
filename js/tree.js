@@ -1,26 +1,206 @@
-import { S, $, esc, fullName, person, visible } from './state.js';
-import { avatarHtml } from './render.js';
-function parentsOf(id){return S.relationships.filter(r=>r.relationship_type==='parent'&&r.to_person_id===id&&visible(person(r.from_person_id))).map(r=>r.from_person_id)}
-function depth(id,seen=new Set()){if(seen.has(id))return 0; seen.add(id); const ps=parentsOf(id); return ps.length?1+Math.max(...ps.map(p=>depth(p,seen))):0}
-function partnerPairs(){const out=[],seen=new Set(); S.relationships.filter(r=>r.relationship_type==='partner').forEach(r=>{const a=person(r.from_person_id),b=person(r.to_person_id); if(!visible(a)||!visible(b))return; const key=[a.id,b.id].sort().join('|'); if(!seen.has(key)){seen.add(key);out.push([a.id,b.id])}}); return out}
-function parentGroups(){const by={}; S.relationships.filter(r=>r.relationship_type==='parent'&&visible(person(r.from_person_id))&&visible(person(r.to_person_id))).forEach(r=>(by[r.to_person_id]||=[]).push(r.from_person_id)); const groups={}; Object.entries(by).forEach(([child,ps])=>{const key=ps.slice().sort().join('|'); (groups[key]||={parents:ps.slice().sort(),children:[]}).children.push(child)}); return Object.values(groups)}
-function layout(focusId){const nodeW=178,rowGap=330,startY=120; let people=S.people.filter(visible); const partner=new Map(); partnerPairs().forEach(([a,b])=>{partner.set(a,b);partner.set(b,a)}); const d={}; people.forEach(p=>d[p.id]=depth(p.id)); partnerPairs().forEach(([a,b])=>{const m=Math.max(d[a]||0,d[b]||0);d[a]=m;d[b]=m});
-  const pos={};
-  if(focusId&&d[focusId]!==undefined){const offset=d[focusId]; Object.keys(d).forEach(id=>d[id]=d[id]-offset);
-    if(S.treeGenerationLimit!=='all') people=people.filter(p=>Math.abs(d[p.id])<=S.treeGenerationLimit);
+import * as d3 from 'd3';
+import * as f3 from 'https://cdn.jsdelivr.net/npm/family-chart@0.9.0/dist/family-chart.esm.js';
+import { S, $, esc, fullName, person, initial, visiblePeople } from './state.js';
+import { faceForPerson, cropStyle } from './render.js';
+import { renderFan, bindFan } from './fan.js';
+
+let chart = null;
+
+function relIndexes(people) {
+  const ids = new Set(people.map(p => p.id));
+  const childrenOf = {}, parentsOf = {}, spousesOf = {};
+  S.relationships.forEach(r => {
+    if (!ids.has(r.from_person_id) || !ids.has(r.to_person_id)) return;
+    if (r.relationship_type === 'parent') {
+      (childrenOf[r.from_person_id] ||= []).push(r.to_person_id);
+      (parentsOf[r.to_person_id] ||= []).push(r.from_person_id);
+    }
+    if (r.relationship_type === 'partner') {
+      (spousesOf[r.from_person_id] ||= new Set()).add(r.to_person_id);
+      (spousesOf[r.to_person_id] ||= new Set()).add(r.from_person_id);
+    }
+  });
+  return { childrenOf, parentsOf, spousesOf };
+}
+
+async function avatarField(p) {
+  if (p.avatar_path) {
+    const bucketName = typeof FAMILY_MEDIA_BUCKET !== 'undefined' ? FAMILY_MEDIA_BUCKET : 'family-media';
+    const url = S.sb.storage.from(bucketName).getPublicUrl(p.avatar_path).data.publicUrl;
+    return { avatarKind: 'img', avatarUrl: url };
   }
-  const survivingDepths=people.map(p=>d[p.id]), minD=survivingDepths.length?Math.min(0,...survivingDepths):0; people.forEach(p=>d[p.id]=d[p.id]-minD);
-  const rows={}, used=new Set(); people.forEach(p=>{if(used.has(p.id))return; let members=[p.id],q=partner.get(p.id); if(q&&!used.has(q)&&d[q]===d[p.id]&&people.some(x=>x.id===q)){members=[p.id,q].sort((a,b)=>fullName(person(a)).localeCompare(fullName(person(b))));used.add(q)} used.add(p.id); (rows[d[p.id]||0]||=[]).push({members,width:members.length*nodeW+(members.length-1)*46,x:0})}); Object.entries(rows).forEach(([k,units])=>{let x=220; units.sort((a,b)=>fullName(person(a.members[0])).localeCompare(fullName(person(b.members[0])))); units.forEach(u=>{u.x=x;x+=u.width+90;u.members.forEach((id,i)=>pos[id]={x:u.x+i*(nodeW+46),y:startY+(+k)*rowGap,unit:u})})}); return pos}
-export async function renderTree(){const graph=$('graph'); if(!graph)return; graph.innerHTML='<div class="graph-inner" id="graphInner"></div>'; const inner=$('graphInner'), pos=layout(S.treeFocusId), nodeW=178,nodeH=156; function h(x,y,w){const e=document.createElement('div');e.className='line h';e.style.left=(w<0?x+w:x)+'px';e.style.top=y+'px';e.style.width=Math.abs(w)+'px';inner.appendChild(e)} function v(x,y,hh){const e=document.createElement('div');e.className='line v';e.style.left=x+'px';e.style.top=y+'px';e.style.height=Math.max(0,hh)+'px';inner.appendChild(e)} function lab(x,y,t){const e=document.createElement('div');e.className='rel-label';e.style.left=x+'px';e.style.top=y+'px';e.textContent=t;inner.appendChild(e)} partnerPairs().forEach(([a,b])=>{if(!pos[a]||!pos[b])return; const l=pos[a].x<pos[b].x?a:b, r=l===a?b:a, y=pos[l].y+74; h(pos[l].x+nodeW,y,pos[r].x-(pos[l].x+nodeW)); lab((pos[l].x+nodeW+pos[r].x)/2-35,y-27,'Partner')}); parentGroups().forEach(g=>{const ps=g.parents.filter(id=>pos[id]), cs=g.children.filter(id=>pos[id]); if(!ps.length||!cs.length)return; const pc=ps.reduce((s,id)=>s+pos[id].x+nodeW/2,0)/ps.length, bottom=Math.max(...ps.map(id=>pos[id].y+nodeH)), top=Math.min(...cs.map(id=>pos[id].y)), by=(bottom+top)/2; v(pc,bottom,by-bottom); const left=Math.min(...cs.map(id=>pos[id].x+nodeW/2)), right=Math.max(...cs.map(id=>pos[id].x+nodeW/2)); h(left,by,right-left); cs.forEach(id=>v(pos[id].x+nodeW/2,by,pos[id].y-by))}); for(const p of S.people.filter(visible)){if(!pos[p.id])continue; const xy=pos[p.id]; const n=document.createElement('div'); n.className='node'+(p.id===S.treeFocusId?' node-focused':''); n.dataset.treeFocus=p.id; n.style.left=xy.x+'px'; n.style.top=xy.y+'px'; n.innerHTML=`${await avatarHtml(p)}<strong>${esc(fullName(p))}</strong><span class="small">${esc(p.birth_date||'')}${p.death_date?' – '+esc(p.death_date):''}</span><a class="tree-view-profile" data-person-id="${p.id}">View profile →</a>`; inner.appendChild(n)} syncFocusChip(); if(S.treeFocusId&&pos[S.treeFocusId]) centerOn(pos[S.treeFocusId],nodeW,nodeH); applyZoom()}
-function centerOn(xy,nodeW,nodeH){const wrap=$('graphWrap'); if(!wrap)return; wrap.scrollLeft=Math.max(0,xy.x+nodeW/2-wrap.clientWidth/2); wrap.scrollTop=Math.max(0,xy.y+nodeH/2-wrap.clientHeight/2)}
-function syncFocusChip(){const chip=$('treeFocusChip'); const sel=$('treeGenerationSelect'); if(sel&&sel.value!==String(S.treeGenerationLimit))sel.value=String(S.treeGenerationLimit); if(!chip)return; if(!S.treeFocusId){chip.classList.add('hidden'); return} const p=person(S.treeFocusId); chip.classList.remove('hidden'); chip.querySelector('span').textContent='Focused on '+(p?fullName(p):'…')}
-export function setTreeFocus(id){S.treeFocusId=id; renderTree()}
-export function clearTreeFocus(){S.treeFocusId=null; renderTree()}
-export function applyZoom(){const inner=$('graphInner'); if(inner)inner.style.transform=`scale(${S.graphScale})`; const z=$('zoomLabel'); if(z)z.textContent=Math.round(S.graphScale*100)+'%'}
-export function fitGraph(){S.graphScale=.72; applyZoom(); const wrap=$('graphWrap'); if(wrap){wrap.scrollLeft=90;wrap.scrollTop=60}}
-export function zoom(d){S.graphScale=Math.max(.25,Math.min(2.2,S.graphScale+d)); applyZoom()}
-export function bindTree(){document.getElementById('rebuildGraphBtn')?.addEventListener('click',renderTree); document.getElementById('fitGraphBtn')?.addEventListener('click',fitGraph); document.getElementById('zoomInBtn')?.addEventListener('click',()=>zoom(.12)); document.getElementById('zoomOutBtn')?.addEventListener('click',()=>zoom(-.12)); document.getElementById('zoomResetBtn')?.addEventListener('click',()=>{S.graphScale=1;applyZoom()}); document.getElementById('themeRail')?.addEventListener('click',e=>{const b=e.target.closest('[data-theme]'); if(b){import('./state.js').then(m=>m.applyTheme(b.dataset.theme))}});
-  document.getElementById('graph')?.addEventListener('click',e=>{if(e.target.closest('[data-person-id]'))return; const n=e.target.closest('[data-tree-focus]'); if(n)setTreeFocus(n.dataset.treeFocus)});
-  document.getElementById('treeFocusChip')?.addEventListener('click',clearTreeFocus);
-  document.getElementById('treeGenerationSelect')?.addEventListener('change',e=>{S.treeGenerationLimit=e.target.value==='all'?'all':+e.target.value; renderTree()});
+  const f = faceForPerson(p.id);
+  if (f) return { avatarKind: 'style', avatarStyle: await cropStyle(f, 120) };
+  return { avatarKind: 'initials', avatarInitials: initial(p) };
+}
+
+export async function buildFamilyChartData(people) {
+  const { childrenOf, parentsOf, spousesOf } = relIndexes(people);
+  return Promise.all(people.map(async p => {
+    const av = await avatarField(p);
+    const parents = parentsOf[p.id] || [];
+    const rels = {};
+    if (parents[0]) rels.father = parents[0];
+    if (parents[1]) rels.mother = parents[1];
+    const sp = [...(spousesOf[p.id] || [])];
+    if (sp.length) rels.spouses = sp;
+    const ch = childrenOf[p.id] || [];
+    if (ch.length) rels.children = ch;
+    return { id: p.id, rels, data: { name: fullName(p), birth: p.birth_date || '', death: p.death_date || '', ...av } };
+  }));
+}
+
+function cardInnerHtmlCreator(d) {
+  const p = d.data.data;
+  let avatar;
+  if (p.avatarKind === 'img') avatar = `<div class="fg-card-avatar"><img src="${esc(p.avatarUrl)}" alt=""></div>`;
+  else if (p.avatarKind === 'style') avatar = `<div class="fg-card-avatar" style="${p.avatarStyle}"></div>`;
+  else avatar = `<div class="fg-card-avatar fg-card-initials">${esc(p.avatarInitials)}</div>`;
+  return `<div class="card-inner fg-card">
+    ${avatar}
+    <strong>${esc(p.name)}</strong>
+    <span class="small">${esc(p.birth || '')}${p.death ? ' – ' + esc(p.death) : ''}</span>
+    <a class="tree-view-profile" data-person-id="${d.data.id}">View profile →</a>
+  </div>`;
+}
+
+function depthsFor(limit) {
+  if (limit === 'all') return { a: 40, p: 40 };
+  const n = +limit;
+  return { a: n, p: n };
+}
+
+function getZoomListener() {
+  if (!chart) return null;
+  const svg = chart.svg;
+  if (!svg) return null;
+  const el = svg.__zoomObj ? svg : svg.parentNode;
+  return el && el.__zoomObj ? el : null;
+}
+
+function syncZoomLabel() {
+  const el = getZoomListener();
+  const z = $('zoomLabel');
+  if (!z) return;
+  const k = el ? d3.zoomTransform(el).k : 1;
+  z.textContent = Math.round(k * 100) + '%';
+}
+
+function defaultFocusId(ids) {
+  if (S.treeFocusId && ids.has(S.treeFocusId)) return S.treeFocusId;
+  if (S.profile?.person_id && ids.has(S.profile.person_id)) return S.profile.person_id;
+  const sorted = [...ids].map(person).filter(Boolean).sort((a, b) => fullName(a).localeCompare(fullName(b)));
+  return sorted[0]?.id || null;
+}
+
+function syncFocusChip() {
+  const chip = $('treeFocusChip');
+  const sel = $('treeGenerationSelect');
+  if (sel && sel.value !== String(S.treeGenerationLimit)) sel.value = String(S.treeGenerationLimit);
+  if (!chip) return;
+  const p = person(S.treeFocusId);
+  if (!p) { chip.classList.add('hidden'); return }
+  chip.classList.remove('hidden');
+  chip.querySelector('span').textContent = 'Centred on ' + fullName(p);
+}
+
+function onCardClick(e, d) {
+  if (e.target.closest('[data-person-id]')) return;
+  const id = d.data.id;
+  S.treeFocusId = id;
+  renderTree();
+}
+
+export async function renderTree() {
+  const graphWrap = $('graphWrap'), fanWrap = $('fanWrap');
+  const showFan = S.treeViewMode === 'fan';
+  graphWrap?.classList.toggle('hidden', showFan);
+  fanWrap?.classList.toggle('hidden', !showFan);
+  document.querySelectorAll('#treeViewToggle [data-tree-view]').forEach(b => b.classList.toggle('primary', b.dataset.treeView === (showFan ? 'fan' : 'tree')));
+  text($('treeHelpStrip'), showFan
+    ? 'Focus person sits at the centre bottom; ancestors fan outward, one ring per generation back.'
+    : 'Click a person to make them the centre of the tree. Use "Show" to limit how many generations appear around them.');
+
+  const el = $('graph');
+  if (!el) return;
+  const people = visiblePeople();
+  const ids = new Set(people.map(p => p.id));
+  S.treeFocusId = defaultFocusId(ids);
+
+  if (showFan) {
+    chart = null;
+    await renderFan(people);
+    syncFocusChip();
+    return;
+  }
+
+  if (!people.length) { el.innerHTML = '<p class="small tree-empty">No one visible yet — add some people first.</p>'; return }
+  if (!S.treeFocusId) { el.innerHTML = '<p class="small tree-empty">No one to focus on yet.</p>'; return }
+
+  const data = await buildFamilyChartData(people);
+  el.innerHTML = '';
+  chart = f3.createChart('#graph', data);
+  chart.setTransitionTime(350);
+  chart.setCardHtml()
+    .setCardDim({ w: 180, h: 168 })
+    .setCardInnerHtmlCreator(cardInnerHtmlCreator)
+    .setOnCardClick(onCardClick);
+  // card_x_spacing/card_y_spacing are the actual center-to-center gap between
+  // cards, not a margin added on top of card_dim — must exceed card_dim.w/h or
+  // adjacent cards overlap.
+  chart.setCardXSpacing(230);
+  chart.setCardYSpacing(250);
+  chart.setSingleParentEmptyCard(false);
+  chart.setShowSiblingsOfMain(true);
+  const { a, p: pd } = depthsFor(S.treeGenerationLimit);
+  chart.setAncestryDepth(a);
+  chart.setProgenyDepth(pd);
+  chart.updateMainId(S.treeFocusId);
+  chart.updateTree({ initial: true });
+
+  const zEl = getZoomListener();
+  if (zEl && zEl.__zoomObj) zEl.__zoomObj.on('zoom.label', () => syncZoomLabel());
+  syncZoomLabel();
+  syncFocusChip();
+}
+
+function text(el, v) { if (el) el.textContent = v }
+
+export function setTreeFocus(id) { S.treeFocusId = id; renderTree() }
+export function clearTreeFocus() {
+  S.treeFocusId = S.profile?.person_id || null;
+  renderTree();
+}
+export function fitGraph() {
+  if (S.treeViewMode === 'fan') { import('./fan.js').then(m => m.fitFan?.()); return }
+  chart?.updateTree({ tree_position: 'fit', transition_time: 400 });
+  setTimeout(syncZoomLabel, 450);
+}
+export function zoom(delta) {
+  if (S.treeViewMode === 'fan') { import('./fan.js').then(m => m.zoomFan?.(delta)); return }
+  const el = getZoomListener();
+  if (!el) return;
+  d3.select(el).transition().duration(200).call(el.__zoomObj.scaleBy, delta > 0 ? 1.2 : 1 / 1.2).on('end', syncZoomLabel);
+}
+export function zoomResetGraph() {
+  if (S.treeViewMode === 'fan') { import('./fan.js').then(m => m.resetFan?.()); return }
+  chart?.updateTree({ tree_position: 'main_to_middle', transition_time: 400 });
+  setTimeout(syncZoomLabel, 450);
+}
+
+export function bindTree() {
+  bindFan();
+  document.getElementById('fitGraphBtn')?.addEventListener('click', fitGraph);
+  document.getElementById('zoomInBtn')?.addEventListener('click', () => zoom(1));
+  document.getElementById('zoomOutBtn')?.addEventListener('click', () => zoom(-1));
+  document.getElementById('zoomResetBtn')?.addEventListener('click', zoomResetGraph);
+  document.getElementById('themeRail')?.addEventListener('click', e => { const b = e.target.closest('[data-theme]'); if (b) { import('./state.js').then(m => m.applyTheme(b.dataset.theme)) } });
+  document.getElementById('treeFocusChip')?.addEventListener('click', clearTreeFocus);
+  document.getElementById('treeGenerationSelect')?.addEventListener('change', e => { S.treeGenerationLimit = e.target.value === 'all' ? 'all' : +e.target.value; renderTree() });
+  document.getElementById('treeViewToggle')?.addEventListener('click', e => {
+    const b = e.target.closest('[data-tree-view]'); if (!b) return;
+    S.treeViewMode = b.dataset.treeView;
+    localStorage.setItem('familyGraphTreeView', S.treeViewMode);
+    renderTree();
+  });
 }
