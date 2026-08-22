@@ -1,6 +1,6 @@
 import { S, $, html, text, esc, fullName, person, titleCaseName, uid, status, userId, userName, canDelete, canEdit, canEditFace, visiblePeople, visiblePhotos, findSimilarPerson } from './state.js';
 import { publicUrl, bucket, loadAll, addOptional } from './api.js';
-import { avatarHtml, cropStyle, faceForPerson, personOptions, photoTitle } from './render.js';
+import { avatarHtml, cropStyle, faceForPerson, personOptions } from './render.js';
 import { renderPeople } from './people.js';
 import { showPage } from './navigation.js';
 
@@ -14,7 +14,7 @@ export async function renderPhotos(){
     if(peopleHere.size)list=list.filter(ph=>ph.id===S.currentPhoto.id||S.faces.some(f=>f.photo_id===ph.id&&f.person_id&&peopleHere.has(f.person_id)));
   }
   if(!list.length){box.innerHTML=samePeopleOnly?'<p class="small">No other photos with these people yet.</p>':'<p class="small">No photos in view yet — try "Show everyone" if you expected to see some here.</p>';return}
-  let out=''; for(const ph of list){const url=await publicUrl(ph); const fc=S.faces.filter(f=>f.photo_id===ph.id).length; const nc=S.faces.filter(f=>f.photo_id===ph.id&&f.person_id).length; const d=ph.taken_date||ph.created_at?.slice(0,10)||''; out+=`<button class="photo-list-item ${S.currentPhoto?.id===ph.id?'active':''}" data-photo-id="${ph.id}"><img src="${url}"><span><b>${esc(photoTitle(ph))}${ph.private?' 🔒':''}</b><small>${esc(d)} · ${fc} face${fc===1?'':'s'}${nc?` · ${nc} named`:''}</small></span></button>`}
+  let out=''; for(const ph of list){const url=await publicUrl(ph); const fc=S.faces.filter(f=>f.photo_id===ph.id).length; const nc=S.faces.filter(f=>f.photo_id===ph.id&&f.person_id).length; const d=ph.taken_date||ph.created_at?.slice(0,10)||''; out+=`<button class="photo-list-item ${S.currentPhoto?.id===ph.id?'active':''}" data-photo-id="${ph.id}"><img src="${url}"><b>${esc(d||'Undated')}${ph.private?' 🔒':''}</b>${ph.title?`<span class="photo-list-title">${esc(ph.title)}</span>`:''}<small>${fc} face${fc===1?'':'s'}${nc?` · ${nc} named`:''}</small></button>`}
   box.innerHTML=out;
 }
 export async function renderPhotoPeople(){const box=$('photoPeopleNav'); if(!box)return; let out=''; for(const p of visiblePeople().slice(0,30)){const f=faceForPerson(p.id); out+=`<div class="photo-person-link" data-person-id="${p.id}"><div class="tiny-avatar" style="${f?await cropStyle(f,34):''}">${f?'':esc((fullName(p)[0]||'?').toUpperCase())}</div><div><b>${esc(fullName(p))}</b><br><span class="small">${esc(p.birth_date||'')}</span></div><span class="blue-dot"></span></div>`} box.innerHTML=out||'<p class="small">No people yet.</p>'}
