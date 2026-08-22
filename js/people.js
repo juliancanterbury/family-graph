@@ -2,10 +2,13 @@ import { S, $, esc, fullName, titleCaseName, userId, canDelete, visiblePeople, f
 import { avatarHtml } from './render.js';
 import { renderAll } from './render.js';
 import { setMyPerson } from './api.js';
+function firstNameOf(p){return p.given_names||fullName(p).trim().split(/\s+/)[0]||''}
+function lastNameOf(p){if(p.family_name)return p.family_name; const parts=fullName(p).trim().split(/\s+/); return parts.length>1?parts[parts.length-1]:(parts[0]||'')}
 export async function renderPeople(){
   const list=$('peopleList'); if(!list)return;
   const sortBy=localStorage.getItem('familyGraphPeopleSort')||'given_names';
-  const sorted=[...visiblePeople()].sort((a,b)=>(a[sortBy]||fullName(a)).localeCompare(b[sortBy]||fullName(b)));
+  const keyFn=sortBy==='given_names'?firstNameOf:lastNameOf;
+  const sorted=[...visiblePeople()].sort((a,b)=>keyFn(a).localeCompare(keyFn(b))||fullName(a).localeCompare(fullName(b)));
   const btn=$('peopleSortBtn'); if(btn)btn.textContent=sortBy==='given_names'?'Sort: First name':'Sort: Surname';
   let out=''; for(const p of sorted){out+=`<div class="people-card" data-person-id="${p.id}">${await avatarHtml(p)}<strong>${esc(fullName(p))}</strong><p>${esc(p.birth_date||'No dates yet')}${p.death_date?' – '+esc(p.death_date):''}</p><button class="danger small-btn owner-only" data-no-nav data-delete-person="${p.id}">Delete</button></div>`}
   list.innerHTML=out||'<p>No one in view yet — try "Show everyone" if you expected to see someone here.</p>';
