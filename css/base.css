@@ -6,7 +6,7 @@
 .custom-select-menu button{background:transparent;box-shadow:none;justify-content:flex-start;text-align:left;padding:8px 10px;border-radius:6px;font-weight:600;font-size:13px}
 .custom-select-menu button:hover{background:#242424}
 .custom-select-menu button.active{color:var(--accent)}
-.person-picker{position:relative;display:inline-block}
+.person-picker{position:relative;display:inline-block;max-width:100%}.person-picker-btn{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:top}
 .person-picker-menu{min-width:240px}
 .person-picker-filter{margin-bottom:4px;padding:8px 10px;font-size:13px}
 .person-picker-list{max-height:240px;overflow:auto;display:flex;flex-direction:column;gap:2px}
