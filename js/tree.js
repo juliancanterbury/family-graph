@@ -172,11 +172,17 @@ export async function renderTree() {
   chart.setAncestryDepth(a);
   chart.setProgenyDepth(pd);
   chart.updateMainId(S.treeFocusId);
-  chart.updateTree({ initial: true });
-
-  const zEl = getZoomListener();
-  if (zEl && zEl.__zoomObj) zEl.__zoomObj.on('zoom.label', () => syncZoomLabel());
-  syncZoomLabel();
+  // The container isn't guaranteed to have its real on-screen size yet on the
+  // very first render of a session (e.g. right after the page/tab becomes
+  // visible) — measuring it too early gives a tiny initial "fit" scale that
+  // only a manual Fit/zoom fixes. Deferring past two animation frames
+  // guarantees a layout pass has actually happened first.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    chart.updateTree({ initial: true });
+    const zEl = getZoomListener();
+    if (zEl && zEl.__zoomObj) zEl.__zoomObj.on('zoom.label', () => syncZoomLabel());
+    syncZoomLabel();
+  }));
   syncFocusChip();
 }
 

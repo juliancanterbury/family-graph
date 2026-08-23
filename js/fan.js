@@ -44,6 +44,12 @@ export async function renderFan(people) {
   const hierarchyRoot = d3.hierarchy(data).sum(d => (d.children && d.children.length) ? 0 : 1);
   d3.partition().size([1, maxDepth + 1])(hierarchyRoot);
 
+  // Same timing issue as the tree: the container isn't guaranteed to have its
+  // real on-screen size on the very first render of a session, so measuring
+  // it immediately can produce a tiny fallback-sized fan. Defer past two
+  // animation frames to guarantee a layout pass has happened first.
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
   const rect = wrapEl.getBoundingClientRect();
   const width = Math.max(360, rect.width || 800), height = Math.max(360, rect.height || 600);
   const ringWidth = Math.min(width / 2, height - 40) / (maxDepth + 1);

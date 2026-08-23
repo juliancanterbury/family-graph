@@ -65,7 +65,7 @@ function showInviteMessage(p,email){
 
 async function trayHtml(excludeIds){
   const people=visiblePeople().filter(p=>!excludeIds.has(p.id));
-  const rows=await Promise.all(people.map(async p=>`<div class="tray-chip" draggable="true" data-tray-person="${p.id}">${await avatarHtml(p,'tray-avatar')}<span>${esc(fullName(p))}</span></div>`));
+  const rows=await Promise.all(people.map(async p=>`<div class="tray-chip" draggable="true" data-tray-person="${p.id}">${await avatarHtml(p,'tray-avatar',26)}<span>${esc(fullName(p))}</span></div>`));
   return rows.join('')||'<p class="small">No one else in view to link — try "Show everyone" in the header.</p>';
 }
 
@@ -84,7 +84,7 @@ export async function renderPersonPage(id){
   const relSection = (S.editMode&&canEdit()) ? `
     <div class="rel-builder" data-focus="${id}">
       <div class="rel-zone" data-zone="parent"><div class="zone-label">Parent</div><div class="zone-chips">${parents.map(x=>zoneChip(x.relId,x.p)).join('')||'<span class="zone-empty">drop here</span>'}</div></div>
-      <div class="rel-builder-center">${await avatarHtml(p,'rel-center-photo')}<strong>${esc(fullName(p))}</strong></div>
+      <div class="rel-builder-center">${await avatarHtml(p,'rel-center-photo',80)}<strong>${esc(fullName(p))}</strong></div>
       <div class="rel-zone" data-zone="partner"><div class="zone-label">Partner</div><div class="zone-chips">${partners.map(x=>zoneChip(x.relId,x.p)).join('')||'<span class="zone-empty">drop here</span>'}</div></div>
       <div class="rel-zone" data-zone="child"><div class="zone-label">Child</div><div class="zone-chips">${children.map(x=>zoneChip(x.relId,x.p)).join('')||'<span class="zone-empty">drop here</span>'}</div></div>
     </div>
@@ -128,7 +128,7 @@ export async function renderPersonPage(id){
     <button data-back class="back-link">← Back</button>
     <div class="person-mode-toggle"><button id="personViewModeBtn" class="${S.editMode?'':'primary'}">View mode</button>${canEdit()?`<button id="personEditModeBtn" class="${S.editMode?'primary':''}">Edit mode</button>`:''}</div>
     <div class="person-hero">
-      ${await avatarHtml(p,'person-hero-photo')}
+      ${await avatarHtml(p,'person-hero-photo',96)}
       <div>
         <h2>${esc(fullName(p))}</h2>
         ${p.maiden_name?`<p class="small">née ${esc(p.maiden_name)}</p>`:''}

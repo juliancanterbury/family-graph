@@ -126,8 +126,9 @@
 
       <!-- PHOTOS -->
       <section id="photoPage" class="page photo-page hidden">
-        <aside class="photo-left">
-          <h3>Photos</h3>
+        <div class="photo-left-backdrop" id="photoLeftBackdrop"></div>
+        <aside class="photo-left" id="photoLeftPanel">
+          <div class="photo-left-head"><h3>Photos</h3><button class="photo-drawer-close-btn" id="photoDrawerCloseBtn">✕</button></div>
           <div class="photo-filter-toggle" id="photoFilterToggle">
             <button data-filter="same" class="primary">Same people</button>
             <button data-filter="all">All</button>
@@ -136,6 +137,7 @@
         </aside>
         <div class="photo-main">
           <div class="toolbar">
+            <button id="photoDrawerToggleBtn" class="photo-drawer-toggle-btn">☰ Photos</button>
             <button id="viewModeBtn">View mode</button>
             <button id="editModeBtn" class="contributor-only">Edit mode</button>
             <button id="showUploadScreenBtn" class="contributor-only">Upload photo</button>
