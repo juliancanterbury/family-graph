@@ -1,6 +1,7 @@
 import { S, $, html, text, esc, fullName, person, titleCaseName, uid, status, userId, userName, canDelete, canEdit, canEditFace, visiblePeople, visiblePhotos, findSimilarPerson } from './state.js';
 import { publicUrl, bucket, loadAll, addOptional } from './api.js';
 import { avatarHtml, cropStyle, faceForPerson, personPickerHtml } from './render.js';
+import { readExifDate } from './exif.js';
 import { renderPeople } from './people.js';
 import { showPage } from './navigation.js';
 
@@ -114,7 +115,7 @@ export function renderComments(){const box=$('photoComments'); if(!box)return; c
 function fillRelationshipSelects(){const opts=visiblePeople().map(p=>`<option value="${p.id}">${esc(fullName(p))}</option>`).join(''); html('relA',opts); html('relB',opts)}
 export async function selectPhoto(id){const ph=S.photos.find(p=>p.id===id); if(!ph)return; S.currentPhoto=ph; S.selectedFaceId=null; S.photoZoom=1; S.photoBaseWidth=null; const target='#photo/'+id; if(location.hash!==target)history.replaceState(null,'',target); await renderPhotoPage(); status('Photo loaded')}
 export async function uploadPhotoFile(file){
-  if(!file)return; if(!canEdit())return alert('You don\'t have permission to upload photos.'); status('Uploading photo…'); const id=uid(), ext=(file.name.split('.').pop()||'jpg').toLowerCase(), path=`photos/${id}/original.${ext}`; const up=await S.sb.storage.from(bucket()).upload(path,file,{upsert:false}); if(up.error)return alert(up.error.message); const dims=await imageDims(file); const isPrivate=canDelete()&&!!$('privatePhotoToggle')?.checked; const ins=await S.sb.from('photos').insert({id,title:file.name,storage_path:path,original_filename:file.name,mime_type:file.type,width:dims.width,height:dims.height,uploaded_by:userId(),private:isPrivate}).select().single(); if(ins.error)return alert(ins.error.message); S.photos.unshift(ins.data); S.currentPhoto=ins.data; await renderPhotoPage(); status(isPrivate?'Private photo saved (only visible to you)':'Photo saved'); setTimeout(()=>detectFaces(true),350);
+  if(!file)return; if(!canEdit())return alert('You don\'t have permission to upload photos.'); status('Uploading photo…'); const id=uid(), ext=(file.name.split('.').pop()||'jpg').toLowerCase(), path=`photos/${id}/original.${ext}`; const up=await S.sb.storage.from(bucket()).upload(path,file,{upsert:false}); if(up.error)return alert(up.error.message); const dims=await imageDims(file); const takenDate=await readExifDate(file); const isPrivate=canDelete()&&!!$('privatePhotoToggle')?.checked; const ins=await S.sb.from('photos').insert({id,title:file.name,storage_path:path,original_filename:file.name,mime_type:file.type,width:dims.width,height:dims.height,taken_date:takenDate,uploaded_by:userId(),private:isPrivate}).select().single(); if(ins.error)return alert(ins.error.message); S.photos.unshift(ins.data); S.currentPhoto=ins.data; await renderPhotoPage(); status(isPrivate?'Private photo saved (only visible to you)':'Photo saved'); setTimeout(()=>detectFaces(true),350);
 }
 export async function uploadPhoto(ev){await uploadPhotoFile(ev.target.files?.[0])}
 export async function uploadPhotoAndOpen(ev){await uploadPhotoFile(ev.target.files?.[0]); if(S.currentPhoto) await showPage('photo')}
