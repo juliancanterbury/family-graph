@@ -1,0 +1,29 @@
+name: Supabase keepalive
+
+# Prevents the Supabase free-tier project from auto-pausing after 7 days
+# of inactivity, by sending one real, lightweight database query every
+# 3 days (a safe margin under the 7-day limit).
+
+on:
+  schedule:
+    - cron: '0 3 */3 * *'   # every 3 days at 03:00 UTC
+  workflow_dispatch: {}      # lets you also trigger it manually from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query Supabase
+        run: |
+          http_status=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/people?select=id&limit=1" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}")
+
+          echo "HTTP status: $http_status"
+          cat /tmp/response.json
+
+          if [ "$http_status" -ge 400 ]; then
+            echo "Ping failed — Supabase returned an error. Check that the secrets are still correct and the 'people' table still exists."
+            exit 1
+          fi
