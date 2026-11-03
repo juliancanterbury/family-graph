@@ -11,6 +11,8 @@
 .fan-svg{width:100%;height:100%;display:block;cursor:grab}
 .fan-arc{fill:#181818;stroke:#262626;stroke-width:1px;transition:fill .15s}
 .fan-arc:hover{fill:#232323}
+.fan-arc{cursor:pointer}
+.fan-arc-empty{fill:none;stroke:#1e1e1e;stroke-width:1px;stroke-dasharray:3 3;pointer-events:none}
 .fan-arc-main{fill:var(--accent);stroke:none;cursor:default}
 .fan-arc-main:hover{fill:var(--accent)}
 .fan-label{pointer-events:none;font-size:10px;fill:#eee}

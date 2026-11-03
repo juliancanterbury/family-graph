@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Tree test harness</title>
+  <!-- Local-only harness: renders the real Tree/Fan page against messy fake
+       data with no Supabase login. Serve the repo root (see .claude/launch.json)
+       and open /dev/tree-test.html. Not linked from the app. -->
+  <link rel="stylesheet" href="../css/base.css">
+  <link rel="stylesheet" href="../css/layout.css">
+  <link rel="stylesheet" href="../css/tree.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/family-chart@0.9.0/dist/styles/family-chart.css">
+  <style>#graphPage{height:100vh}</style>
+  <script type="importmap">
+  { "imports": { "d3": "https://cdn.jsdelivr.net/npm/d3@7/+esm" } }
+  </script>
+</head>
+<body data-theme="ocean">
+  <script type="module" src="tree-test.js"></script>
+</body>
+</html>

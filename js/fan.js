@@ -26,6 +26,13 @@ function buildNode(id, depth, maxDepth, seenPath, visibleIds) {
   return { id, name: fullName(p), birth: p.birth_date || '', death: p.death_date || '', empty: false, children };
 }
 
+function knownDepth(id, visibleIds, seen = new Set()) {
+  if (seen.has(id)) return 0;
+  seen.add(id);
+  const ps = parentsOfVisible(id, visibleIds);
+  return ps.length ? 1 + Math.max(...ps.map(p => knownDepth(p, visibleIds, new Set(seen)))) : 0;
+}
+
 export function bindFan() {}
 
 export async function renderFan(people) {
@@ -39,7 +46,9 @@ export async function renderFan(people) {
   const root = rootId ? person(rootId) : null;
   if (!root) { wrapEl.innerHTML = '<svg class="fan-svg" id="fanSvg"></svg><p class="small tree-empty">No one to focus on yet.</p>'; return }
 
-  const maxDepth = maxDepthFor(S.treeGenerationLimit);
+  // Only draw as many rings as there are known ancestors — "Everyone" on a
+  // 4-generation family otherwise leaves the outer rings empty and the fan tiny.
+  const maxDepth = Math.max(1, Math.min(maxDepthFor(S.treeGenerationLimit), knownDepth(rootId, ids)));
   const data = buildNode(rootId, 0, maxDepth, new Set(), ids);
   const hierarchyRoot = d3.hierarchy(data).sum(d => (d.children && d.children.length) ? 0 : 1);
   d3.partition().size([1, maxDepth + 1])(hierarchyRoot);
@@ -55,8 +64,14 @@ export async function renderFan(people) {
   const ringWidth = Math.min(width / 2, height - 40) / (maxDepth + 1);
 
   svg.attr('viewBox', `0 0 ${width} ${height}`).attr('width', '100%').attr('height', '100%');
-  const centerG = svg.append('g').attr('class', 'fan-center').attr('transform', `translate(${width / 2},${height - 24})`);
-  const g = centerG.append('g').attr('class', 'fan-zoom');
+  // Zoom transform goes on the outer group so wheel/pinch zoom centres on the
+  // pointer; the fan's own offset to the bottom-centre sits inside it.
+  const zoomG = svg.append('g').attr('class', 'fan-zoom');
+  // Sit the fan's flat edge at the bottom when height is the limit, but centre
+  // it vertically on tall narrow screens instead of leaving the top half empty.
+  const fanRadius = ringWidth * (maxDepth + 1);
+  const cy = Math.min(height - 24, (height + fanRadius) / 2);
+  const g = zoomG.append('g').attr('class', 'fan-center').attr('transform', `translate(${width / 2},${cy})`);
 
   const arc = d3.arc()
     .startAngle(d => -Math.PI / 2 + d.x0 * Math.PI)
@@ -65,6 +80,12 @@ export async function renderFan(people) {
     .outerRadius(d => Math.max(d.y0 * ringWidth + 2, d.y1 * ringWidth - 2))
     .padAngle(0.004)
     .cornerRadius(2);
+
+  // Unknown ancestors still get a faint slot, so each parent's side of the fan
+  // keeps its shape and it's clear which branch a name belongs to.
+  g.selectAll('path.fan-arc-empty').data(hierarchyRoot.descendants().filter(d => d.data.empty)).join('path')
+    .attr('class', 'fan-arc-empty')
+    .attr('d', arc);
 
   const nodes = hierarchyRoot.descendants().filter(d => !d.data.empty);
 
@@ -89,25 +110,36 @@ export async function renderFan(people) {
     const arcLenAtMid = angularWidth * rMid;
     const years = [d.data.birth, d.data.death].filter(Boolean).join(' – ');
     if (d.depth === 0) {
-      sel.attr('transform', 'translate(0,-10)');
-      sel.append('text').attr('text-anchor', 'middle').attr('class', 'fan-label-name').text(d.data.name);
+      // Centre of mass of the half-disc, not its flat bottom edge, or the
+      // years line gets clipped by the bottom of the view.
+      sel.attr('transform', `translate(0,${-ringWidth * 0.42})`);
+      const n = Math.max(4, Math.floor(ringWidth * 1.6 / 6.5));
+      sel.append('text').attr('text-anchor', 'middle').attr('class', 'fan-label-name').text(d.data.name.length > n ? d.data.name.slice(0, n - 1) + '…' : d.data.name);
       if (years) sel.append('text').attr('text-anchor', 'middle').attr('dy', '1.15em').attr('class', 'fan-label-years').text(years);
       return;
     }
-    if (arcLenAtMid < 16) return; // too small to label
-    const mid = -Math.PI / 2 + (d.x0 + d.x1) / 2 * Math.PI;
-    const r0 = d.y0 * ringWidth + 6;
-    const rot = mid * 180 / Math.PI;
-    sel.attr('transform', `rotate(${rot}) translate(${r0},0)`);
-    const maxChars = Math.max(4, Math.floor(arcLenAtMid / 6));
-    const nameText = d.data.name.length > maxChars ? d.data.name.slice(0, maxChars - 1) + '…' : d.data.name;
-    sel.append('text').attr('class', 'fan-label-name').text(nameText);
-    if (years && angularWidth * ((d.y1) * ringWidth) > 30) {
-      sel.append('text').attr('class', 'fan-label-years').attr('dy', '1.1em').text(years);
-    }
+    const thickness = (d.y1 - d.y0) * ringWidth - 4;
+    // Wide inner segments read best with text along the arc; the narrow outer
+    // ones only have room for text running out along the radius.
+    const tangential = arcLenAtMid >= thickness;
+    const along = (tangential ? arcLenAtMid : thickness) - 8; // room for the text's length
+    const across = tangential ? thickness : arcLenAtMid; // room for stacked lines
+    if (across < 11 || along < 24) return; // too small to label
+    // d3.arc measures angles clockwise from 12 o'clock; SVG rotate() measures
+    // from 3 o'clock, hence the -90 for radial text. The +180 on the left half
+    // keeps radial text upright. Tangential text never needs flipping because
+    // the fan is only the top semicircle.
+    const midDeg = (-Math.PI / 2 + (d.x0 + d.x1) / 2 * Math.PI) * 180 / Math.PI;
+    const rot = tangential ? midDeg : midDeg - 90 + (midDeg < 0 ? 180 : 0);
+    const rad = midDeg * Math.PI / 180;
+    sel.attr('transform', `translate(${rMid * Math.sin(rad)},${-rMid * Math.cos(rad)}) rotate(${rot})`);
+    const fit = (s, px) => { const n = Math.max(3, Math.floor(along / px)); return s.length > n ? s.slice(0, n - 1) + '…' : s };
+    const twoLines = years && across >= 24;
+    sel.append('text').attr('class', 'fan-label-name').attr('text-anchor', 'middle').attr('dy', twoLines ? '-0.2em' : '0.35em').text(fit(d.data.name, 6));
+    if (twoLines) sel.append('text').attr('class', 'fan-label-years').attr('text-anchor', 'middle').attr('dy', '1em').text(fit(years, 5));
   });
 
-  const zb = d3.zoom().scaleExtent([0.35, 3]).on('zoom', e => g.attr('transform', e.transform));
+  const zb = d3.zoom().scaleExtent([0.35, 3]).on('zoom', e => { zoomG.attr('transform', e.transform); syncFanZoomLabel() });
   svg.call(zb);
   svgEl.__fanZoom = zb;
   syncFanZoomLabel();

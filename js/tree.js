@@ -20,6 +20,15 @@ function relIndexes(people) {
       (spousesOf[r.to_person_id] ||= new Set()).add(r.from_person_id);
     }
   });
+  // family-chart only draws a child's second parent if the two parents are
+  // spouses — without this, co-parents who were never recorded as partners
+  // leave one parent missing from the child's branch.
+  Object.values(parentsOf).forEach(ps => {
+    if (ps.length < 2) return;
+    const [a, b] = ps;
+    (spousesOf[a] ||= new Set()).add(b);
+    (spousesOf[b] ||= new Set()).add(a);
+  });
   return { childrenOf, parentsOf, spousesOf };
 }
 
