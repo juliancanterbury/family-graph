@@ -17,19 +17,23 @@
   <meta name="twitter:title" content="Family Graph">
   <meta name="twitter:description" content="Our private shared family photo archive and family tree.">
   <meta name="twitter:image" content="https://juliancanterbury.github.io/family-graph/assets/icons/icon-512.png">
-  <link rel="stylesheet" href="css/base.css">
-  <link rel="stylesheet" href="css/layout.css">
-  <link rel="stylesheet" href="css/photos.css">
-  <link rel="stylesheet" href="css/tree.css">
-  <link rel="stylesheet" href="css/admin.css">
-  <link rel="stylesheet" href="css/dashboard.css">
-  <link rel="stylesheet" href="css/person.css">
+  <script>
+  // Always load the app's own CSS and JS fresh. GitHub Pages lets browsers keep files for 10
+  // minutes, and the code files load each other with plain names, so after an update a browser
+  // could run a mix of new and old files (e.g. the new merge tool beside the old Photos code).
+  // A per-visit tag on every file (CSS here, JS via the import map below) rules that out.
+  (function(){
+    var v=Date.now().toString(36);
+    ['base','layout','photos','tree','admin','dashboard','person'].forEach(function(n){document.write('<link rel="stylesheet" href="css/'+n+'.css?v='+v+'">')});
+    var imports={'d3':'https://cdn.jsdelivr.net/npm/d3@7/+esm'};
+    ['admin','api','app','avatar','dedupe','exif','fan','navigation','people','person','photohash','photos','relationships','render','review','scan','state','tree'].forEach(function(n){imports['./js/'+n+'.js']='./js/'+n+'.js?v='+v});
+    document.write('<script type="importmap">'+JSON.stringify({imports:imports})+'<'+'/script>');
+  })();
+  </script>
+  <noscript><link rel="stylesheet" href="css/base.css"></noscript>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/family-chart@0.9.0/dist/styles/family-chart.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/@vladmandic/human/dist/human.js"></script>
-  <script type="importmap">
-  { "imports": { "d3": "https://cdn.jsdelivr.net/npm/d3@7/+esm" } }
-  </script>
 </head>
 <body data-theme="ocean">
 
@@ -293,6 +297,6 @@
   <div id="avatarCaptureOverlay" class="avatar-capture-overlay hidden"></div>
 
   <script src="config.js"></script>
-  <script type="module" src="js/app.js"></script>
+  <script type="module">import './js/app.js'; // goes through the import map above, so it's always fresh</script>
 </body>
 </html>
