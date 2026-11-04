@@ -10,3 +10,5 @@
 .person-picker-menu{min-width:240px}
 .person-picker-filter{margin-bottom:4px;padding:8px 10px;font-size:13px}
 .person-picker-list{max-height:240px;overflow:auto;display:flex;flex-direction:column;gap:2px}
+body:not(.is-admin) .admin-tool{display:none!important}
+body.can-edit .guest-only{display:none!important}

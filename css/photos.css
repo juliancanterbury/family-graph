@@ -15,3 +15,31 @@
   .photo-canvas img{width:100%;min-width:0;max-width:100%}
   .side{overflow:visible}
 }
+/* Face boxes: let the page pan/pinch over unselected boxes; only the selected box (in Edit mode) captures touch */
+.face{touch-action:manipulation}
+.edit-mode .face{cursor:pointer}
+.edit-mode .face.selected:not(.not-mine):not(.locked){cursor:move;touch-action:none}
+.face.dragging{opacity:.85}
+/* Resize handles: one per corner, only on the selected box; the visible dot is small but the hit area is large */
+.face .handle{position:absolute;width:16px;height:16px;border-radius:50%;background:#fff;border:2px solid #111;box-shadow:0 0 0 1px #0006;z-index:2;display:none}
+.face .handle::after{content:"";position:absolute;inset:-12px;border-radius:50%}
+.edit-mode .face.selected .handle{display:block}
+.handle-nw{left:-9px;top:-9px;cursor:nwse-resize}.handle-se{right:-9px;bottom:-9px;cursor:nwse-resize}
+.handle-ne{right:-9px;top:-9px;cursor:nesw-resize}.handle-sw{left:-9px;bottom:-9px;cursor:nesw-resize}
+@media (pointer:coarse){.face .handle{width:22px;height:22px}.handle-nw{left:-12px;top:-12px}.handle-se{right:-12px;bottom:-12px}.handle-ne{right:-12px;top:-12px}.handle-sw{left:-12px;bottom:-12px}.face .handle::after{inset:-14px}}
+/* Padlock: shown in Edit mode on the selected box and on locked boxes. A locked box ignores taps
+   and drags (they reach whatever is underneath); only its padlock stays tappable. */
+.face .face-lock{position:absolute;top:-13px;left:50%;transform:translateX(-50%);width:26px;height:26px;padding:0;margin:0;border-radius:50%;border:2px solid #111;background:#fff;color:#111;display:none;place-items:center;box-shadow:0 1px 3px #0008;z-index:3;cursor:pointer;font-style:normal}
+.face .face-lock svg{width:13px;height:13px}
+.face .face-lock::after{content:"";position:absolute;inset:-9px;border-radius:50%}
+.face.locked .face-lock{background:var(--accent);color:#000}
+.edit-mode .face.selected .face-lock,.edit-mode .face.locked .face-lock{display:grid}
+.edit-mode .face.locked{pointer-events:none;border-style:dotted;cursor:default}
+.edit-mode .face.locked .face-lock:not(.readonly){pointer-events:auto}
+.face .face-lock.readonly{cursor:default;opacity:.8}
+.hide-boxes .face .face-lock{display:none!important}
+@media (pointer:coarse){.face .face-lock{width:32px;height:32px;top:-16px}.face .face-lock svg{width:15px;height:15px}}
+.face .face-label:empty{display:none}.photo-canvas img{-webkit-user-drag:none;user-select:none}
+body:not(.edit-mode) .face.not-mine{border-style:solid;opacity:1}
+.edit-mode .face.selected .face-lock{top:-36px}
+@media (pointer:coarse){.edit-mode .face.selected .face-lock{top:-48px}}

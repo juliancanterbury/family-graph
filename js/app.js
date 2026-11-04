@@ -7,6 +7,7 @@ import { bindPeople } from './people.js';
 import { bindTree } from './tree.js';
 import { bindReview } from './review.js';
 import { bindAdmin } from './admin.js';
+import { bindDedupe } from './dedupe.js';
 import { bindPerson } from './person.js';
 import { bindAvatarCapture } from './avatar.js';
 import { bindScanCapture } from './scan.js';
@@ -15,7 +16,7 @@ export async function boot(){
   catch(e){console.error(e); hide('loading');hide('login');hide('app');show('problem'); text('problemText',e.message)}
 }
 function bindAll(){
-  bindNavigation(); bindPhotos(); bindPeople(); bindTree(); bindReview(); bindAdmin(); bindPerson(); bindAvatarCapture(); bindScanCapture(); bindPersonPickers();
+  bindNavigation(); bindPhotos(); bindPeople(); bindTree(); bindReview(); bindAdmin(); bindDedupe(); bindPerson(); bindAvatarCapture(); bindScanCapture(); bindPersonPickers();
   $('loginBtn')?.addEventListener('click',sendLogin); $('signOutBtn')?.addEventListener('click',signOut); $('refreshBtn')?.addEventListener('click',loadAll);
   $('viewModeBtn')?.addEventListener('click',()=>setEditMode(false)); $('editModeBtn')?.addEventListener('click',()=>setEditMode(true));
   $('scopeToggleBtn')?.addEventListener('click',toggleScope);

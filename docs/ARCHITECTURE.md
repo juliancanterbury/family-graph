@@ -21,7 +21,9 @@ module below now owns one concern.
 | `api.js` | Supabase client setup, auth (`ensureProfile`, `setMyPerson`), data loading |
 | `render.js` | Cross-page render helpers (avatar/crop rendering, dashboard stats, page routing dispatch) |
 | `navigation.js` | Page switching, the person-page route (`showPerson`), edit/view mode |
-| `photos.js` | Upload, face detection (Human.js), face box drag/resize, photo browsing |
+| `photos.js` | Upload (with duplicate check), face detection (Human.js), face box select/drag/resize/lock, photo browsing |
+| `photohash.js` | Photo fingerprints: SHA-256 of the file and a 64-bit visual hash for resized copies |
+| `dedupe.js` | Owner-only Admin tool: find duplicate photos, preview a merge, then merge onto one survivor |
 | `people.js` | People list, add/delete person, the "which person are you" linking card |
 | `person.js` | Individual Person page — profile, drag-and-drop relationship builder, photo gallery |
 | `relationships.js` | Relationship validation (no self-links, no ancestor loops), create/delete, the Relationships page list |
@@ -45,6 +47,9 @@ on the Tree page.
   device/screen size. Any face box saved before this convention existed is
   still in the old screen-pixel format and needs a one-time manual nudge to
   migrate — see the plan doc's history for why.
+- Face boxes are only draggable once selected, and only after the pointer moves a few pixels;
+  a locked box (`faces.locked`) can't be picked or moved in Edit mode and taps pass through it.
+  `dev/photos-test.html` exercises all of this, the upload check and the merge tool against fake data.
 - `visiblePeople()` / `visiblePhotos()` in `state.js` are the single source
   of truth for "family-side" scoping — any new page listing people or photos
   should filter through these rather than reading `S.people`/`S.photos`

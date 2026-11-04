@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Photos test harness</title>
+  <!-- Local-only harness: renders the real Photos page against fake messy data with an
+       in-memory stand-in for Supabase (no login, nothing leaves the browser). Serve the repo
+       root (see .claude/launch.json) and open /dev/photos-test.html. Not linked from the app. -->
+  <link rel="stylesheet" href="../css/base.css">
+  <link rel="stylesheet" href="../css/layout.css">
+  <link rel="stylesheet" href="../css/photos.css">
+  <link rel="stylesheet" href="../css/admin.css">
+  <script type="importmap">
+  { "imports": { "d3": "https://cdn.jsdelivr.net/npm/d3@7/+esm" } }
+  </script>
+  <style>
+    html,body{height:100%;margin:0}
+    #photoPage{height:calc(100vh - 44px)}
+    .harness{position:sticky;top:0;z-index:2500;display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 8px;background:#222;color:#eee;font:12px sans-serif;min-height:44px;box-sizing:border-box}
+    .harness button,.harness select{font:12px sans-serif;padding:4px 8px}
+    #harnessLog{opacity:.8}
+    .harness input[type=checkbox]{width:auto;padding:0;box-shadow:none}
+    .harness select{width:auto}
+  </style>
+</head>
+<body data-theme="ocean">
+  <div class="harness">
+    <select id="hRole"><option>owner</option><option>editor</option><option>contributor</option><option>guest</option></select>
+    <label><input type="checkbox" id="hEdit"> Edit mode</label>
+    <label title="Off = the new SQL columns don't exist yet"><input type="checkbox" id="hMigrated" checked> DB migrated</label>
+    <button id="hDupes">Find duplicates</button>
+    <button id="hUpExact">Upload exact copy</button>
+    <button id="hUpResized">Upload resized copy</button>
+    <button id="hUpNew">Upload new photo</button>
+    <span id="harnessLog"></span>
+  </div>
+  <script type="module" src="photos-test.js"></script>
+</body>
+</html>

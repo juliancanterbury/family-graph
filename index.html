@@ -138,30 +138,30 @@
         <div class="photo-main">
           <div class="toolbar">
             <button id="photoDrawerToggleBtn" class="photo-drawer-toggle-btn">☰ Photos</button>
-            <button id="viewModeBtn">View mode</button>
+            <button id="viewModeBtn" class="contributor-only">View mode</button>
             <button id="editModeBtn" class="contributor-only">Edit mode</button>
             <button id="showUploadScreenBtn" class="contributor-only">Upload photo</button>
             <label class="owner-only private-toggle small"><input id="privatePhotoToggle" type="checkbox"> Private (only me)</label>
-            <button id="latestPhotoBtn">Latest photo</button>
+            <button id="latestPhotoBtn" class="admin-tool">Latest photo</button>
             <button id="prevPhotoBtn">← Prev</button>
             <button id="nextPhotoBtn">Next →</button>
-            <button class="edit-only" id="detectFacesBtn">Detect faces</button>
+            <button class="edit-only admin-tool" id="detectFacesBtn">Detect faces</button>
             <button class="edit-only" id="addFaceBtn">Add face box</button>
-            <button id="suggestFaceBtn">Suggest face/name</button>
+            <button id="suggestFaceBtn" class="contributor-only admin-tool">Suggest face/name</button>
             <button id="toggleBoxesBtn">Hide boxes</button>
             <button id="toggleNamesBtn">Hide names</button>
             <button id="photoZoomOutBtn">−</button>
             <button id="photoZoomInBtn">+</button>
             <button id="photoZoomResetBtn">Reset zoom</button>
-            <button id="rotateLeftBtn" class="edit-only">Rotate ↺</button>
-            <button id="rotateRightBtn" class="edit-only">Rotate ↻</button>
-            <button id="deletePhotoBtn" class="edit-only danger">Delete photo</button>
-            <button class="edit-only danger" id="deleteFaceBtn">Delete selected</button>
+            <button id="rotateLeftBtn" class="edit-only admin-tool">Rotate ↺</button>
+            <button id="rotateRightBtn" class="edit-only admin-tool">Rotate ↻</button>
+            <button id="deletePhotoBtn" class="edit-only admin-tool danger">Delete photo</button>
+            <button class="edit-only danger" id="deleteFaceBtn">Delete box</button>
             <span id="saveStatus" class="save-status">Ready</span>
           </div>
           <div class="photo-scroll">
             <div class="photo-canvas" id="photoCanvas">
-              <img id="mainPhoto" src="" alt="" crossorigin="anonymous">
+              <img id="mainPhoto" src="" alt="" crossorigin="anonymous" draggable="false">
               <div id="emptyPhoto" class="empty-photo drop-zone">
                 <div class="empty-photo-inner">
                   <span class="upload-icon">📷</span>
@@ -175,15 +175,16 @@
         </div>
         <aside class="side">
           <div class="card"><h2>Selected face</h2><div id="faceEditor"><p>Select or add a face box.</p></div></div>
-          <div class="card small"><p class="small">To connect this person to family members, name them above, then tap their name to open their profile — relationships are built there now.</p></div>
+          <div class="card small contributor-only"><p class="small">To connect this person to family members, name them above, then tap their name to open their profile — relationships are built there now.</p></div>
           <div class="card">
             <h2>Current photo</h2>
             <p><strong id="faceCount">0</strong> face boxes</p>
             <p><strong id="namedCount">0</strong> named faces</p>
             <p class="small" id="photoUploaderLine">Uploaded by: —</p>
-            <div class="row"><label>Date</label><input id="photoDate" type="text" placeholder="e.g. 1975, May 2003, 12 Jan 1998"></div>
-            <div class="row"><label>Place</label><input id="photoPlace" placeholder="Location"></div>
-            <button class="full" id="savePhotoMetaBtn">Save photo details</button>
+            <p class="small guest-only" id="photoMetaLine"></p>
+            <div class="row contributor-only"><label>Date</label><input id="photoDate" type="text" placeholder="e.g. 1975, May 2003, 12 Jan 1998"></div>
+            <div class="row contributor-only"><label>Place</label><input id="photoPlace" placeholder="Location"></div>
+            <button class="full contributor-only" id="savePhotoMetaBtn">Save photo details</button>
           </div>
           <div class="card comments-card">
             <h2>Comments / corrections</h2>
@@ -225,6 +226,7 @@
             <div><h2>Database</h2><p class="small">Owner/editor database tools.</p></div>
             <button id="backfillFaceDataBtn" class="hidden">Backfill face recognition data</button>
             <button id="backfillPhotoDatesBtn" class="hidden">Backfill photo dates from EXIF</button>
+            <button id="findDuplicatesBtn" class="owner-only">Find duplicate photos</button>
             <div class="admin-tabs" id="adminTabs">
               <button class="db-tab active" data-dbtab="people">People</button>
               <button class="db-tab" data-dbtab="photos">Photos</button>

@@ -83,12 +83,16 @@ export function visiblePhotos(){
   });
 }
 export const canDelete=()=>String(S.profile?.role||'viewer').toLowerCase()==='owner';
-export const canEdit=()=>['owner','editor','family editor','contributor'].includes(String(S.profile?.role||'viewer').toLowerCase());
+const roleName=()=>String(S.profile?.role||'viewer').toLowerCase();
+export const canEdit=()=>['owner','admin','administrator','editor','family editor','contributor'].includes(roleName());
+// Admin-level accounts (owner, editor, or a hand-set 'admin'/'administrator' role) get the power tools
+// on the Photos page: face detection, rotate, delete photo. Contributors and guests get a simpler page.
+export const isAdmin=()=>['owner','admin','administrator','editor'].includes(roleName());
 export const userName=()=>S.profile?.display_name || S.session?.user?.email || 'Family member';
 export const userId=()=>S.session?.user?.id || 'local';
 // A face box can be moved/resized/directly renamed/deleted only by whoever created it, or by the owner.
 // Anyone with edit access can still add new boxes, and suggest corrections on boxes they didn't create.
 export const canEditFace=f=>canDelete()||(f&&f.created_by&&f.created_by===userId());
 export function status(t){text('saveStatus',t)}
-export function setClasses(){document.body.classList.toggle('can-edit',canEdit());document.body.classList.toggle('can-delete',canDelete());document.body.classList.toggle('edit-mode',S.editMode)}
+export function setClasses(){document.body.classList.toggle('can-edit',canEdit());document.body.classList.toggle('can-delete',canDelete());document.body.classList.toggle('is-admin',isAdmin());document.body.classList.toggle('edit-mode',S.editMode)}
 export function applyTheme(name=S.theme){S.theme=name;document.body.dataset.theme=name;localStorage.setItem('familyGraphTheme',name);document.querySelectorAll('.theme-chip').forEach(b=>b.classList.toggle('active',b.dataset.theme===name))}

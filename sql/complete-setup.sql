@@ -40,6 +40,8 @@ create table if not exists photos (
   width integer,
   height integer,
   private boolean default false,
+  content_hash text,
+  phash text,
   updated_at timestamptz,
   uploaded_by uuid references auth.users(id) on delete set null,
   created_at timestamptz default now()
@@ -57,6 +59,7 @@ create table if not exists faces (
   confidence numeric,
   descriptor jsonb,
   status text default 'manual',
+  locked boolean not null default false,
   created_by uuid references auth.users(id) on delete set null,
   created_at timestamptz default now()
 );
