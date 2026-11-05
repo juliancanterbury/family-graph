@@ -229,8 +229,19 @@ export function bindTree() {
   document.getElementById('treeFocusChip')?.addEventListener('click', clearTreeFocus);
   document.getElementById('treeGenerationSelectBtn')?.addEventListener('click', e => {
     e.stopPropagation();
-    document.querySelectorAll('.custom-select-menu').forEach(m => m.classList.toggle('hidden', m !== e.target.nextElementSibling));
+    const menu = e.currentTarget.nextElementSibling, opening = menu.classList.contains('hidden');
+    document.querySelectorAll('.custom-select-menu').forEach(m => m.classList.add('hidden'));
+    if (!opening) return;
+    menu.classList.remove('hidden');
+    // The toolbar scrolls sideways on phones, which also clips anything below
+    // it, so the menu is position:fixed and placed by hand under its button.
+    const r = e.currentTarget.getBoundingClientRect();
+    menu.style.top = r.bottom + 4 + 'px';
+    menu.style.left = Math.max(8, Math.min(r.left, innerWidth - menu.offsetWidth - 8)) + 'px';
   });
+  const closeGenerationMenu = () => document.querySelector('#treeGenerationSelect .custom-select-menu')?.classList.add('hidden');
+  document.querySelector('.tree-toolbar')?.addEventListener('scroll', closeGenerationMenu);
+  window.addEventListener('resize', closeGenerationMenu);
   document.getElementById('treeGenerationSelect')?.addEventListener('click', e => {
     const opt = e.target.closest('[data-value]'); if (!opt) return;
     S.treeGenerationLimit = opt.dataset.value === 'all' ? 'all' : +opt.dataset.value;

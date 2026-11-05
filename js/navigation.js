@@ -17,7 +17,8 @@ export async function showPage(page='dashboard'){
       const id=decodeURIComponent(parts[0]||'');
       if(id) S.treeFocusId=id;
       if(parts[1]==='tree'||parts[1]==='fan') S.treeViewMode=parts[1];
-      if(parts[2]) S.treeGenerationLimit=parts[2]==='all'?'all':+parts[2];
+      // Links saved before the options became 2/3/4/All can still say 1 or 5.
+      if(parts[2]) S.treeGenerationLimit=parts[2]==='all'?'all':Math.min(4,Math.max(2,+parts[2]||3));
     }
   }
   await renderPage(page);
